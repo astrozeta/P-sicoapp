@@ -1,9 +1,39 @@
 import { GoogleGenAI } from "@google/genai";
 import { Entry, BoxType, AnalysisResult } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper robusto para obtener variables de entorno en Vite
+const getApiKey = (): string | undefined => {
+  // 1. Intentar vía Vite (Estándar para React apps modernas y GitHub Actions)
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+    // @ts-ignore
+    return import.meta.env.VITE_API_KEY;
+  }
+  
+  // 2. Intentar vía process.env (Fallback seguro para Node/Local)
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignorar errores de referencia en navegadores estrictos
+  }
+  
+  return undefined;
+};
 
 export const analyzeDailyBalance = async (entries: Entry[]): Promise<AnalysisResult> => {
+  const apiKey = getApiKey();
+
+  if (!apiKey) {
+    return {
+      summary: "IA no disponible",
+      advice: "Para activar el análisis inteligente, configura el secreto VITE_API_KEY en tu repositorio de GitHub (Settings > Secrets and variables > Actions)."
+    };
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
   const positives = entries.filter(e => e.type === BoxType.POSITIVE).map(e => e.text);
   const negatives = entries.filter(e => e.type === BoxType.NEGATIVE).map(e => e.text);
 
