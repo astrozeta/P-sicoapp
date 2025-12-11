@@ -46,7 +46,7 @@ export interface SurveyQuestion {
   type: QuestionType;
   text: string;
   options?: string[]; // For multiple choice
-  section?: string; // NEW: To group questions (e.g., "Depresión", "Ansiedad")
+  section?: string; // TO group questions (e.g., "Depresión", "Ansiedad")
 }
 
 export interface SurveyTemplate {
@@ -83,6 +83,26 @@ export interface Task {
   description: string;
   isCompleted: boolean;
   createdAt: number;
+}
+
+// --- Educational Resources (Infographics) ---
+
+export interface EducationalResource {
+    id: string;
+    psychologistId: string;
+    title: string;
+    description: string;
+    type: 'image' | 'pdf' | 'video' | 'link';
+    url: string;
+    createdAt: number;
+}
+
+export interface ResourceAssignment {
+    id: string;
+    resourceId: string;
+    patientId: string;
+    assignedBy: string;
+    assignedAt: number;
 }
 
 // --- Persistent Reports ---

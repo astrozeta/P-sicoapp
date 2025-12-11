@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, ViewState } from './types';
 import LandingPage from './components/LandingPage';
@@ -12,15 +13,17 @@ const Sidebar: React.FC<{
     currentView: ViewState, 
     onChangeView: (v: ViewState) => void,
     onLogout: () => void,
-    role: string
-}> = ({ currentView, onChangeView, onLogout, role }) => (
+    role: string,
+    psychActiveTab?: string,
+    onPsychTabChange?: (tab: 'overview' | 'patients' | 'tools' | 'review') => void
+}> = ({ currentView, onChangeView, onLogout, role, psychActiveTab, onPsychTabChange }) => (
     <aside className="hidden md:flex flex-col w-64 bg-slate-950 border-r border-slate-800 fixed inset-y-0 left-0 z-50">
         <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-800">
             <div className="w-8 h-8 bg-gradient-to-tr from-brand-500 to-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg">N</div>
             <span className="font-bold text-white text-lg tracking-tight">NaretApp</span>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {role === 'patient' && (
                 <>
                     <button 
@@ -44,16 +47,45 @@ const Sidebar: React.FC<{
                 </>
             )}
             
-            {role === 'psychologist' && (
-                 <button 
-                    onClick={() => onChangeView('psych-dashboard')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'psych-dashboard' ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                    Gestión Pacientes
-                </button>
+            {role === 'psychologist' && onPsychTabChange && (
+                <>
+                    <button 
+                        onClick={() => { onChangeView('psych-dashboard'); onPsychTabChange('overview'); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'overview' ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                        </svg>
+                        Resumen
+                    </button>
+                    <button 
+                        onClick={() => { onChangeView('psych-dashboard'); onPsychTabChange('patients'); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'patients' ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        Pacientes
+                    </button>
+                    <button 
+                        onClick={() => { onChangeView('psych-dashboard'); onPsychTabChange('tools'); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'tools' ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                        </svg>
+                        Herramientas
+                    </button>
+                    <button 
+                        onClick={() => { onChangeView('psych-dashboard'); onPsychTabChange('review'); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'review' ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                    >
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Resultados
+                    </button>
+                </>
             )}
 
             {role === 'admin' && (
@@ -98,7 +130,7 @@ const MobileNav: React.FC<{
                         className={`flex flex-col items-center justify-center transition-colors ${currentView === 'hub' ? 'text-brand-400' : 'text-slate-500'}`}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                         </svg>
                         <span className="text-[10px] font-bold uppercase">Inicio</span>
                     </button>
@@ -112,13 +144,14 @@ const MobileNav: React.FC<{
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                             </svg>
                         </div>
-                        <span className={`text-[10px] font-bold uppercase mt-1 ${currentView === 'tool-naretbox' ? 'text-brand-400' : ''}`}>Naretbox</span>
+                        <span className="text-[10px] font-bold uppercase mt-1">Naretbox</span>
                     </button>
                  </>
              )}
 
              {(role === 'psychologist' || role === 'admin') && (
                  <button 
+                    onClick={() => {}}
                     className={`flex flex-col items-center justify-center transition-colors text-brand-400`}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -134,6 +167,7 @@ const MobileNav: React.FC<{
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('landing');
+  const [psychView, setPsychView] = useState<'overview' | 'patients' | 'tools' | 'review'>('overview');
   const [isLoading, setIsLoading] = useState(true);
 
   // Initial Load with Async Check
@@ -192,7 +226,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-brand-500 selection:text-white flex">
       
-      <Sidebar currentView={currentView} onChangeView={setCurrentView} onLogout={handleLogout} role={user.role} />
+      <Sidebar 
+        currentView={currentView} 
+        onChangeView={setCurrentView} 
+        onLogout={handleLogout} 
+        role={user.role}
+        psychActiveTab={psychView}
+        onPsychTabChange={setPsychView}
+      />
 
       {/* Main Content Area */}
       <main className="flex-1 md:pl-64 flex flex-col min-h-screen">
@@ -213,7 +254,7 @@ export default function App() {
          <div className="p-6 flex-1 overflow-y-auto">
             {currentView === 'admin-dashboard' && <AdminDashboard />}
             
-            {currentView === 'psych-dashboard' && <PsychologistDashboard user={user} />}
+            {currentView === 'psych-dashboard' && <PsychologistDashboard user={user} activeSection={psychView} />}
             
             {currentView === 'hub' && (
                 <ToolsHub onSelectTool={handleSelectTool} user={user} />
