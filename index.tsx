@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css'; // CRUCIAL: Importar estilos para el build
 import App from './App';
 
 const rootElement = document.getElementById('root');

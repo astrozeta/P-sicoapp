@@ -4,95 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Naretbox</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                50: '#fdf6f3',
-                100: '#fbece7',
-                200: '#f7d8ce',
-                300: '#f2bbaa',
-                400: '#eb957b',
-                500: '#EF8762', // The requested color
-                600: '#da6640',
-                700: '#b64f31',
-                800: '#91412d',
-                900: '#75392a',
-                950: '#3f1b14',
-              },
-              slate: {
-                850: '#1e293b',
-                950: '#020617',
-              }
-            },
-            animation: {
-              'fade-in': 'fadeIn 0.5s ease-out',
-              'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-              'scale-in': 'scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            },
-            keyframes: {
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              slideUp: {
-                '0%': { transform: 'translateY(20px)', opacity: '0' },
-                '100%': { transform: 'translateY(0)', opacity: '1' },
-              },
-              scaleIn: {
-                '0%': { transform: 'scale(0.95)', opacity: '0' },
-                '100%': { transform: 'scale(1)', opacity: '1' },
-              }
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      /* Smooth scrolling and prevent bounce on mobile */
-      html, body {
-        overscroll-behavior-y: none;
-        height: 100%;
-        background-color: #020617; /* Slate 950 */
-        color: #e2e8f0;
-      }
-      #root {
-        height: 100%;
-      }
-      /* Custom Scrollbar for dark theme */
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #0f172a; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #334155; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #475569; 
-      }
-    </style>
   <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
-    "recharts": "https://esm.sh/recharts@^3.5.1",
-    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
-    "react/": "https://esm.sh/react@^19.2.1/",
     "react": "https://esm.sh/react@^19.2.1",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.1",
+    "vite": "https://esm.sh/vite@^7.2.7",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
