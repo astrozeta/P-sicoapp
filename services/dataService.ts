@@ -1,6 +1,6 @@
 
 import { supabase, IS_SUPABASE_CONFIGURED } from '../supabaseClient';
-import { Entry, SurveyTemplate, SurveyAssignment, Task, PatientReport } from '../types';
+import { Entry, SurveyTemplate, SurveyAssignment, Task, PatientReport, EducationalResource, ResourceAssignment } from '../types';
 import { LOCAL_STORAGE_KEY } from '../constants';
 
 // --- Local Storage Helpers ---
@@ -14,10 +14,7 @@ const saveLocalData = (key: string, data: any[]) => localStorage.setItem(key, JS
 
 export const getEntries = async (userId: string): Promise<Entry[]> => {
     if (!IS_SUPABASE_CONFIGURED) {
-        const allEntries = getLocalData(LOCAL_STORAGE_KEY) as any[]; // In local we stored all mixed? Or need to filter? 
-        // Previously LOCAL_STORAGE_KEY stored simple array. We need to filter by user in multi-user local mode.
-        // For simplicity in this local-mock, we assume the entries in LS have userId attached or we attach it now.
-        // If legacy data didn't have userId, we might see it for everyone. That's acceptable for fallback.
+        const allEntries = getLocalData(LOCAL_STORAGE_KEY) as any[]; 
         return allEntries.filter((e: any) => e.userId === userId || !e.userId);
     }
 
@@ -81,7 +78,7 @@ export const saveSurveyTemplate = async (template: SurveyTemplate) => {
     }
 
     const { error } = await supabase.from('survey_templates').insert([{
-        // id: template.id, // Let DB generate ID if omitted, or use UUID if provided
+        // id: template.id, 
         psychologist_id: template.psychologistId,
         title: template.title,
         description: template.description,
@@ -149,14 +146,12 @@ export const assignSurveyToPatient = async (template: SurveyTemplate, patientId:
         return;
     }
 
-    // 1. Check if template exists in DB (for standard templates that might be static in code)
     const { data: existingTemplate } = await supabase
         .from('survey_templates')
         .select('id')
         .eq('id', template.id)
         .single();
 
-    // 2. If it doesn't exist, insert it
     if (!existingTemplate) {
         const { error: insertTemplateError } = await supabase.from('survey_templates').insert([{
             id: template.id,
@@ -169,7 +164,6 @@ export const assignSurveyToPatient = async (template: SurveyTemplate, patientId:
         if (insertTemplateError) throw insertTemplateError;
     }
 
-    // 3. Assign
     const { error } = await supabase.from('survey_assignments').insert([{
         template_id: template.id,
         template_title: template.title,
@@ -324,4 +318,92 @@ export const getReportsByPsychologist = async (psychId: string): Promise<Patient
         date: r.date,
         wasEmailed: r.was_emailed
     }));
+};
+
+// --- EDUCATIONAL RESOURCES (INFOGRAPHICS) ---
+
+export const saveResource = async (resource: EducationalResource) => {
+    if (!IS_SUPABASE_CONFIGURED) {
+        const resources = getLocalData('naret_resources');
+        resources.push(resource);
+        saveLocalData('naret_resources', resources);
+        return;
+    }
+    const { error } = await supabase.from('resources').insert([{
+        id: resource.id,
+        psychologist_id: resource.psychologistId,
+        title: resource.title,
+        description: resource.description,
+        type: resource.type,
+        url: resource.url,
+        created_at: resource.createdAt
+    }]);
+    if (error) throw error;
+};
+
+export const getResourcesByPsychologist = async (psychId: string): Promise<EducationalResource[]> => {
+    if (!IS_SUPABASE_CONFIGURED) {
+        const resources = getLocalData('naret_resources');
+        return resources.filter((r: any) => r.psychologistId === psychId);
+    }
+    const { data, error } = await supabase.from('resources').select('*').eq('psychologist_id', psychId);
+    if (error) return [];
+    return data.map((r: any) => ({
+        id: r.id,
+        psychologistId: r.psychologist_id,
+        title: r.title,
+        description: r.description,
+        type: r.type,
+        url: r.url,
+        createdAt: r.created_at
+    }));
+};
+
+export const assignResourceToPatient = async (resourceId: string, patientId: string, assignedBy: string) => {
+     if (!IS_SUPABASE_CONFIGURED) {
+        const assignments = getLocalData('naret_resource_assignments');
+        assignments.push({ id: crypto.randomUUID(), resourceId, patientId, assignedBy, assignedAt: Date.now() });
+        saveLocalData('naret_resource_assignments', assignments);
+        return;
+    }
+    const { error } = await supabase.from('resource_assignments').insert([{
+        resource_id: resourceId,
+        patient_id: patientId,
+        assigned_by: assignedBy,
+        assigned_at: Date.now()
+    }]);
+    if (error) throw error;
+};
+
+export const getAssignedResourcesForPatient = async (patientId: string): Promise<EducationalResource[]> => {
+    if (!IS_SUPABASE_CONFIGURED) {
+         const assignments = getLocalData('naret_resource_assignments').filter((a: any) => a.patientId === patientId);
+         const resources = getLocalData('naret_resources');
+         return resources.filter((r: any) => assignments.some((a: any) => a.resourceId === r.id));
+    }
+    
+    // Join resource_assignments with resources
+    const { data, error } = await supabase
+        .from('resource_assignments')
+        .select(`
+            resource_id,
+            resources:resource_id (*)
+        `)
+        .eq('patient_id', patientId);
+        
+    if (error) return [];
+    
+    return data.map((item: any) => {
+        const r = item.resources;
+        if(!r) return null;
+        return {
+            id: r.id,
+            psychologistId: r.psychologist_id,
+            title: r.title,
+            description: r.description,
+            type: r.type,
+            url: r.url,
+            createdAt: r.created_at
+        };
+    }).filter(Boolean) as EducationalResource[];
 };

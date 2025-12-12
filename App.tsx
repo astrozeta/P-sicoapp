@@ -19,18 +19,18 @@ const Sidebar: React.FC<{
     
     // Explicit handler to ensure navigation state updates correctly
     const handlePsychNav = (tab: 'overview' | 'patients' | 'tools' | 'review') => {
-        // First ensure we are on the dashboard view
+        // Always set the view to dashboard first
         if (currentView !== 'psych-dashboard') {
             onChangeView('psych-dashboard');
         }
-        // Then update the tab
+        // Always update the internal tab
         if (onPsychTabChange) {
             onPsychTabChange(tab);
         }
     };
 
     return (
-        <aside className="hidden md:flex flex-col w-64 bg-slate-950 border-r border-slate-800 fixed inset-y-0 left-0 z-[60]">
+        <aside className="hidden md:flex flex-col w-64 bg-slate-950 border-r border-slate-800 fixed inset-y-0 left-0 z-[100]">
             <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-800">
                 <div className="w-8 h-8 bg-gradient-to-tr from-brand-500 to-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg">N</div>
                 <span className="font-bold text-white text-lg tracking-tight">NaretApp</span>

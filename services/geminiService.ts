@@ -26,13 +26,25 @@ export const analyzeDailyBalance = async (entries: Entry[]): Promise<AnalysisRes
   const apiKey = getApiKey();
 
   if (!apiKey) {
+    console.warn("NaretApp: VITE_API_KEY no detectada.");
     return {
-      summary: "IA no disponible",
-      advice: "Para activar el análisis inteligente, configura el secreto VITE_API_KEY en tu repositorio de GitHub (Settings > Secrets and variables > Actions)."
+      summary: "IA no disponible (Falta API Key)",
+      advice: "Para activar el análisis, configura el secreto VITE_API_KEY en los ajustes de tu repositorio GitHub."
     };
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  // Inicialización PROTEGIDA
+  // Si esto falla, capturamos el error para que NO rompa la app (pantalla blanca/negra)
+  let ai;
+  try {
+      ai = new GoogleGenAI({ apiKey });
+  } catch (initError) {
+      console.error("Error crítico al inicializar GoogleGenAI:", initError);
+      return {
+          summary: "Error de inicialización IA",
+          advice: "Hubo un problema técnico interno al conectar con el servicio de IA. Verifica la consola para más detalles."
+      };
+  }
 
   const positives = entries.filter(e => e.type === BoxType.POSITIVE).map(e => e.text);
   const negatives = entries.filter(e => e.type === BoxType.NEGATIVE).map(e => e.text);
