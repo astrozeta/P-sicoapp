@@ -19,13 +19,13 @@ const Sidebar: React.FC<{
     
     // Explicit handler to ensure navigation state updates correctly
     const handlePsychNav = (tab: 'overview' | 'patients' | 'tools' | 'review') => {
-        // Always set the view to dashboard first
-        if (currentView !== 'psych-dashboard') {
-            onChangeView('psych-dashboard');
-        }
-        // Always update the internal tab
+        // 1. Update the tab state first
         if (onPsychTabChange) {
             onPsychTabChange(tab);
+        }
+        // 2. Then ensure we are on the dashboard view
+        if (currentView !== 'psych-dashboard') {
+            onChangeView('psych-dashboard');
         }
     };
 
@@ -302,7 +302,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 md:pl-64 flex flex-col min-h-screen">
+      <main className="flex-1 md:pl-64 flex flex-col min-h-screen relative z-0">
          
          {/* Mobile Header (Only visible on small screens) */}
          <header className="md:hidden flex items-center justify-between px-6 py-4 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-800">
@@ -320,9 +320,10 @@ export default function App() {
          <div className="p-6 flex-1 overflow-y-auto">
             {currentView === 'admin-dashboard' && <AdminDashboard />}
             
-            {/* IMPORTANT: Pass onSectionChange so dashboard can navigate itself if needed, but primarily relying on props */}
+            {/* IMPORTANT: Key forces re-render on tab change to resolve navigation issues */}
             {currentView === 'psych-dashboard' && (
                 <PsychologistDashboard 
+                    key={psychView}
                     user={user} 
                     activeSection={psychView} 
                     onSectionChange={setPsychView} 
