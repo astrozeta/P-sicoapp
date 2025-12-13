@@ -463,4 +463,3 @@ export const BDI_II_ASSESSMENT: SurveyTemplate = {
     }
   ]
 };
-

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, ViewState } from './types';
 import LandingPage from './components/LandingPage';
@@ -130,103 +131,92 @@ const Sidebar: React.FC<{
     );
 };
 
-// --- Mobile Navigation Bar ---
-const MobileNav: React.FC<{ 
+// --- Mobile Navigation Component ---
+const MobileNav: React.FC<{
     currentView: ViewState, 
     onChangeView: (v: ViewState) => void,
     role: string,
     psychActiveTab?: string,
     onPsychTabChange?: (tab: 'overview' | 'patients' | 'tools' | 'review') => void
 }> = ({ currentView, onChangeView, role, psychActiveTab, onPsychTabChange }) => {
-    
+
     const handlePsychNav = (tab: 'overview' | 'patients' | 'tools' | 'review') => {
-        onChangeView('psych-dashboard');
-        if (onPsychTabChange) onPsychTabChange(tab);
+        if (onPsychTabChange) {
+            onPsychTabChange(tab);
+        }
+        if (currentView !== 'psych-dashboard') {
+            onChangeView('psych-dashboard');
+        }
     };
 
+    if (role === 'admin') return null;
+
     return (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800 pb-safe z-40">
-            <div className="flex justify-around items-center px-4 py-3">
-                {role === 'patient' && (
-                    <>
-                        <button 
-                            onClick={() => onChangeView('hub')}
-                            className={`flex flex-col items-center justify-center transition-colors ${currentView === 'hub' ? 'text-brand-400' : 'text-slate-500'}`}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                            </svg>
-                            <span className="text-[10px] font-bold uppercase">Inicio</span>
-                        </button>
-                        
-                        <button 
-                            onClick={() => onChangeView('tool-naretbox')}
-                            className={`flex flex-col items-center justify-center transition-colors ${currentView === 'tool-naretbox' ? 'text-brand-400' : 'text-slate-500'}`}
-                        >
-                            <div className={`p-1 rounded-lg ${currentView === 'tool-naretbox' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/50' : ''}`}>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                </svg>
-                            </div>
-                            <span className="text-[10px] font-bold uppercase mt-1">Naretbox</span>
-                        </button>
-                    </>
-                )}
-
-                {role === 'psychologist' && (
-                    <>
-                        <button 
-                            onClick={() => handlePsychNav('overview')}
-                            className={`flex flex-col items-center justify-center transition-colors ${psychActiveTab === 'overview' ? 'text-brand-400' : 'text-slate-500'}`}
-                        >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z" />
-                            </svg>
-                            <span className="text-[10px] font-bold uppercase">Resumen</span>
-                        </button>
-                         <button 
-                            onClick={() => handlePsychNav('patients')}
-                            className={`flex flex-col items-center justify-center transition-colors ${psychActiveTab === 'patients' ? 'text-brand-400' : 'text-slate-500'}`}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                            </svg>
-                            <span className="text-[10px] font-bold uppercase">Pacientes</span>
-                        </button>
-                        <button 
-                            onClick={() => handlePsychNav('tools')}
-                            className={`flex flex-col items-center justify-center transition-colors ${psychActiveTab === 'tools' ? 'text-brand-400' : 'text-slate-500'}`}
-                        >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547" />
-                            </svg>
-                            <span className="text-[10px] font-bold uppercase">Herram.</span>
-                        </button>
-                        <button 
-                            onClick={() => handlePsychNav('review')}
-                            className={`flex flex-col items-center justify-center transition-colors ${psychActiveTab === 'review' ? 'text-brand-400' : 'text-slate-500'}`}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="text-[10px] font-bold uppercase">Result.</span>
-                        </button>
-                    </>
-                )}
-
-                {role === 'admin' && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 flex justify-around p-2 z-[100] pb-safe">
+             {role === 'patient' && (
+                <>
                     <button 
-                        onClick={() => onChangeView('admin-dashboard')}
-                        className={`flex flex-col items-center justify-center transition-colors ${currentView === 'admin-dashboard' ? 'text-brand-400' : 'text-slate-500'}`}
+                        onClick={() => onChangeView('hub')}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'hub' ? 'text-brand-500' : 'text-slate-500 hover:text-slate-300'}`}
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.956 11.956 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                         </svg>
-                        <span className="text-[10px] font-bold uppercase">Admin</span>
+                        <span className="text-[10px] font-bold">Inicio</span>
                     </button>
-                )}
-            </div>
-        </nav>
+                    <button 
+                        onClick={() => onChangeView('tool-naretbox')}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'tool-naretbox' ? 'text-brand-500' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                        <span className="text-[10px] font-bold">Naretbox</span>
+                    </button>
+                </>
+             )}
+
+             {role === 'psychologist' && onPsychTabChange && (
+                 <>
+                    <button 
+                        onClick={() => handlePsychNav('overview')}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'overview' ? 'text-brand-500' : 'text-slate-500'}`}
+                    >
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                        </svg>
+                        <span className="text-[10px] font-bold">Resumen</span>
+                    </button>
+                    <button 
+                        onClick={() => handlePsychNav('patients')}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'patients' ? 'text-brand-500' : 'text-slate-500'}`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        <span className="text-[10px] font-bold">Pacientes</span>
+                    </button>
+                    <button 
+                        onClick={() => handlePsychNav('tools')}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'tools' ? 'text-brand-500' : 'text-slate-500'}`}
+                    >
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                        </svg>
+                        <span className="text-[10px] font-bold">Herram.</span>
+                    </button>
+                     <button 
+                        onClick={() => handlePsychNav('review')}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'review' ? 'text-brand-500' : 'text-slate-500'}`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="text-[10px] font-bold">Result.</span>
+                    </button>
+                 </>
+             )}
+        </div>
     );
 };
 
@@ -302,7 +292,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 md:pl-64 flex flex-col min-h-screen relative z-0">
+      <main className="flex-1 md:pl-64 flex flex-col min-h-screen relative">
          
          {/* Mobile Header (Only visible on small screens) */}
          <header className="md:hidden flex items-center justify-between px-6 py-4 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-800">
