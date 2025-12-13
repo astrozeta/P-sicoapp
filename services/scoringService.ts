@@ -1,7 +1,6 @@
-
 import { SurveyResponse } from '../types';
 
-interface SectionScore {
+export interface SectionScore {
     rawScore: number;
     maxScore: number;
     level: 'Normal' | 'Leve' | 'Moderado' | 'Grave';
@@ -9,12 +8,19 @@ interface SectionScore {
     advice: string;
 }
 
-interface AssessmentResult {
+export interface AssessmentResult {
     totalScore: number;
     depression: SectionScore;
     anxiety: SectionScore;
     stress: SectionScore;
     redFlags: string[]; // Alerts like self-harm
+}
+
+export interface BDIResult {
+    score: number;
+    level: string;
+    color: string;
+    hasSuicidalRisk: boolean;
 }
 
 const mapAnswerToPoints = (answer: string): number => {
@@ -89,3 +95,43 @@ export const calculateMentalHealthScore = (responses: SurveyResponse[]): Assessm
         redFlags
     };
 };
+
+// --- BDI-II Scoring ---
+
+export const calculateBDIScore = (responses: SurveyResponse[]): BDIResult => {
+    let totalScore = 0;
+    let hasSuicidalRisk = false;
+
+    responses.forEach(r => {
+        // Answer format is "0: No me siento..." or "3: Me siento..."
+        // Extract the first character as number
+        const valStr = String(r.answer).split(':')[0].trim();
+        const val = parseInt(valStr, 10);
+        
+        if (!isNaN(val)) {
+            totalScore += val;
+        }
+
+        // Check for suicide risk (Item 20, usually id 'bdi_20')
+        if (r.questionId === 'bdi_20' && val > 0) {
+            hasSuicidalRisk = true;
+        }
+    });
+
+    let level = 'Depresión mínima';
+    let color = 'text-emerald-500';
+
+    if (totalScore >= 29) {
+        level = 'Depresión grave';
+        color = 'text-red-500';
+    } else if (totalScore >= 20) {
+        level = 'Depresión moderada';
+        color = 'text-orange-500';
+    } else if (totalScore >= 14) {
+        level = 'Depresión leve';
+        color = 'text-yellow-500';
+    }
+
+    return { score: totalScore, level, color, hasSuicidalRisk };
+};
+
