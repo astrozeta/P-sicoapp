@@ -135,10 +135,8 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     const [resType, setResType] = useState<'image' | 'pdf' | 'video' | 'link'>('image');
     const [resUrl, setResUrl] = useState('');
 
-    // Appointment State (Block logic)
-    const [blockDate, setBlockDate] = useState('');
-    const [blockTime, setBlockTime] = useState('');
-    const [blockDuration, setBlockDuration] = useState(60); // minutes
+    // Appointment Calendar State
+    const [currentWeekStart, setCurrentWeekStart] = useState<Date>(new Date());
 
     // --- PATIENT MODAL / CLINICAL RECORD STATE ---
     const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -189,6 +187,13 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
     useEffect(() => {
         fetchGlobalData();
+        // Set week start to current Monday
+        const d = new Date();
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+        d.setDate(diff);
+        d.setHours(0,0,0,0);
+        setCurrentWeekStart(d);
     }, [user.id, activeSection]);
 
     // Load Patient Specific Data when Modal Opens
@@ -286,32 +291,58 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
         setIsResourceMode(false); setResTitle(''); setResDesc(''); setResUrl('');
     };
 
-    // New Block Logic
-    const handleBlockTime = async () => {
-        if (!blockDate || !blockTime) return;
-        const start = new Date(`${blockDate}T${blockTime}`).getTime();
-        const end = start + blockDuration * 60000;
-        
-        try {
-            await createAppointment({
-                psychologistId: user.id,
-                startTime: start,
-                endTime: end,
-                status: 'blocked' 
-            });
-            await fetchGlobalData();
-            setBlockDate(''); setBlockTime('');
-        } catch(e) { alert("Error al bloquear horario."); }
+    // --- CALENDAR LOGIC ---
+
+    const handlePrevWeek = () => {
+        const newDate = new Date(currentWeekStart);
+        newDate.setDate(newDate.getDate() - 7);
+        setCurrentWeekStart(newDate);
     };
 
-    const handleDeleteSlot = async (id: string) => {
-        if(!confirm("¿Eliminar este registro de la agenda?")) return;
-        try {
-            await deleteAppointmentSlot(id);
-            await fetchGlobalData();
-        } catch(e) { alert("Error al eliminar."); }
+    const handleNextWeek = () => {
+        const newDate = new Date(currentWeekStart);
+        newDate.setDate(newDate.getDate() + 7);
+        setCurrentWeekStart(newDate);
     };
 
+    const handleSlotClick = async (date: Date, existingAppt?: Appointment) => {
+        if (existingAppt) {
+            if (confirm(existingAppt.status === 'booked' 
+                ? `¿Cancelar la cita con ${getPatientName(existingAppt.patientId || '')}?` 
+                : "¿Desbloquear este horario?")) {
+                try {
+                    await deleteAppointmentSlot(existingAppt.id);
+                    await fetchGlobalData();
+                } catch(e) { alert("Error al eliminar."); }
+            }
+        } else {
+            // Block logic for empty slot
+            if (confirm(`¿Bloquear el horario del ${date.toLocaleString()}?`)) {
+                 try {
+                    await createAppointment({
+                        psychologistId: user.id,
+                        startTime: date.getTime(),
+                        endTime: date.getTime() + 3600000, // 1 hour block
+                        status: 'blocked' 
+                    });
+                    await fetchGlobalData();
+                } catch(e) { alert("Error al bloquear horario."); }
+            }
+        }
+    };
+
+    // Generate week days
+    const weekDays = useMemo(() => {
+        const days = [];
+        for(let i=0; i<5; i++) { // Mon-Fri
+            const d = new Date(currentWeekStart);
+            d.setDate(d.getDate() + i);
+            days.push(d);
+        }
+        return days;
+    }, [currentWeekStart]);
+
+    // Save Basic Info
     const saveBasicInfo = async () => {
         if (!selectedPatientId) return;
         try {
@@ -638,52 +669,93 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                 </div>
             )}
 
-            {/* SCHEDULE TAB (Agenda) */}
+            {/* SCHEDULE TAB (Weekly Calendar) */}
             {activeSection === 'schedule' && (
-                <div className="space-y-8 animate-fade-in">
-                    <div className="flex justify-between items-center">
+                <div className="space-y-6 animate-fade-in">
+                    <div className="flex justify-between items-center mb-4">
                         <div>
-                            <h2 className="text-xl font-bold text-slate-200">Agenda</h2>
-                            <p className="text-xs text-slate-500">Horario de atención: Lunes a Viernes, 09:00 - 18:00</p>
+                            <h2 className="text-xl font-bold text-slate-200">Agenda Semanal</h2>
+                            <p className="text-xs text-slate-500">Gestión visual de citas y bloqueos.</p>
                         </div>
-                        
-                        <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex gap-3 items-center">
-                            <input type="date" className="bg-slate-800 text-white text-sm p-2 rounded border border-slate-700" value={blockDate} onChange={e => setBlockDate(e.target.value)} />
-                            <input type="time" className="bg-slate-800 text-white text-sm p-2 rounded border border-slate-700" value={blockTime} onChange={e => setBlockTime(e.target.value)} />
-                            <button onClick={handleBlockTime} className="bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-2 rounded text-sm font-bold border border-red-500/30 transition-colors">
-                                Bloquear Horario
+                        <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800">
+                            <button onClick={handlePrevWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                            </button>
+                            <span className="px-4 text-sm font-bold text-white min-w-[150px] text-center">
+                                {currentWeekStart.toLocaleDateString()} - {new Date(currentWeekStart.getTime() + 4 * 86400000).toLocaleDateString()}
+                            </span>
+                            <button onClick={handleNextWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                             </button>
                         </div>
                     </div>
 
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 overflow-hidden">
-                        <h3 className="text-lg font-bold text-white mb-6">Próximos Eventos (Citas y Bloqueos)</h3>
-                        
-                        {appointments.length === 0 ? (
-                            <p className="text-slate-500 italic">No hay citas ni bloqueos registrados.</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {appointments.map(app => (
-                                    <div key={app.id} className={`flex items-center justify-between p-4 rounded-xl border ${app.status === 'blocked' ? 'bg-slate-800/50 border-slate-700' : 'bg-indigo-900/20 border-indigo-500/30'}`}>
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-3 h-3 rounded-full ${app.status === 'booked' ? 'bg-indigo-500' : 'bg-slate-500'}`}></div>
-                                            <div>
-                                                <p className="font-bold text-white text-sm">
-                                                    {new Date(app.startTime).toLocaleDateString()} - {new Date(app.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                                </p>
-                                                <p className="text-xs text-slate-500">
-                                                    {app.status === 'booked' ? `Paciente: ${getPatientName(app.patientId || '')}` : 'BLOQUEADO (No disponible)'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            {app.meetLink && app.status === 'booked' && <a href={app.meetLink} target="_blank" className="text-xs text-indigo-400 border border-indigo-500/30 px-3 py-1 rounded hover:bg-indigo-500/10">Link</a>}
-                                            <button onClick={() => handleDeleteSlot(app.id)} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/10">Eliminar</button>
-                                        </div>
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl overflow-x-auto">
+                        <div className="min-w-[800px]">
+                            {/* Calendar Header */}
+                            <div className="grid grid-cols-[60px_repeat(5,1fr)] border-b border-slate-800 bg-slate-950/50">
+                                <div className="p-4 border-r border-slate-800 flex items-center justify-center text-xs font-bold text-slate-500">
+                                    HORA
+                                </div>
+                                {weekDays.map((day, i) => (
+                                    <div key={i} className="p-4 border-r border-slate-800 last:border-0 text-center">
+                                        <p className="text-sm font-bold text-white uppercase">{day.toLocaleDateString('es-ES', { weekday: 'short' })}</p>
+                                        <p className="text-xs text-slate-500">{day.getDate()}</p>
                                     </div>
                                 ))}
                             </div>
-                        )}
+
+                            {/* Calendar Body */}
+                            {[9, 10, 11, 12, 13, 14, 15, 16, 17].map(hour => (
+                                <div key={hour} className="grid grid-cols-[60px_repeat(5,1fr)] border-b border-slate-800 last:border-0 hover:bg-slate-800/20 transition-colors">
+                                    <div className="border-r border-slate-800 p-2 text-center text-xs text-slate-500 font-mono flex items-start justify-center pt-3">
+                                        {hour}:00
+                                    </div>
+                                    {weekDays.map((day, i) => {
+                                        // Find appointment logic
+                                        const cellTime = new Date(day);
+                                        cellTime.setHours(hour, 0, 0, 0);
+                                        const cellTimestamp = cellTime.getTime();
+                                        const existingAppt = appointments.find(a => {
+                                            const start = a.startTime;
+                                            return Math.abs(start - cellTimestamp) < 60000; // Match within minute
+                                        });
+
+                                        return (
+                                            <div 
+                                                key={i} 
+                                                className={`
+                                                    border-r border-slate-800 last:border-0 h-24 p-1 relative group cursor-pointer transition-colors
+                                                    ${!existingAppt ? 'hover:bg-slate-800/40' : ''}
+                                                `}
+                                                onClick={() => handleSlotClick(cellTime, existingAppt)}
+                                            >
+                                                {existingAppt ? (
+                                                    <div className={`
+                                                        w-full h-full rounded-lg p-2 text-xs flex flex-col justify-between shadow-lg border
+                                                        ${existingAppt.status === 'blocked' 
+                                                            ? 'bg-slate-800 border-slate-700 bg-[url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0JyBoZWlnaHQ9JzQnPgo8cmVjdCB3aWR0aD0nNCcgaGVpZ2h0PSc0JyBmaWxsPScjMWUyOTNiJy8+CjxwYXRoIGQ9J00wIDRMNCAwJyBzdHJva2U9JyMzMzQxNTUnIHN0cm9rZS13aWR0aD0nMicvPgo8L3N2Zz4=")]' 
+                                                            : 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500'
+                                                        }
+                                                    `}>
+                                                        <div className="font-bold text-white truncate">
+                                                            {existingAppt.status === 'blocked' ? 'BLOQUEADO' : getPatientName(existingAppt.patientId || '')}
+                                                        </div>
+                                                        <div className="text-[10px] opacity-80 truncate">
+                                                            {existingAppt.status === 'blocked' ? 'No disponible' : 'Ver detalles'}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                        <span className="text-xs font-bold text-slate-500 bg-slate-900 px-2 py-1 rounded border border-slate-700">+ Bloquear</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
