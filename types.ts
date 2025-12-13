@@ -10,12 +10,12 @@ export interface Entry {
   id: string;
   text: string;
   type: BoxType;
-  timestamp: number; // Unix timestamp
-  dateStr: string; // ISO date string YYYY-MM-DD for grouping
+  timestamp: number;
+  dateStr: string;
 }
 
 export interface AppSettings {
-  notificationTime: string; // HH:MM format
+  notificationTime: string;
   notificationsEnabled: boolean;
 }
 
@@ -33,8 +33,72 @@ export interface User {
   photoUrl?: string;
   password?: string;
   role: UserRole;
-  assignedPsychologistId?: string; // For patients
+  assignedPsychologistId?: string;
   assignedPsychologistEmail?: string;
+  
+  // Extended Profile Basic Info (DB mapped to profiles)
+  birthDate?: string;
+  gender?: string;
+  address?: string;
+  occupation?: string;
+  maritalStatus?: string;
+  insuranceNumber?: string;
+  referralSource?: string;
+}
+
+// --- Clinical Records (New Tables) ---
+
+export interface ClinicalProfile {
+    userId: string;
+    reasonForConsult: string;
+    preexistingConditions: string[]; // Stored as JSON array in DB
+    previousTreatments: string;
+    currentMedication: string;
+    diagnosis: string;
+    riskLevel: 'Bajo' | 'Medio' | 'Alto';
+    riskDetails: string;
+    therapeuticApproach: string;
+    patientFeedback: string;
+}
+
+export interface ClinicalSession {
+    id: string;
+    patientId: string;
+    psychologistId: string;
+    date: number; // Unix timestamp
+    objectives: string;
+    summary: string;
+    notes: string;
+    progress: number; // 0-100
+    nextSteps: string;
+}
+
+export interface TreatmentGoal {
+    id: string;
+    patientId: string;
+    description: string;
+    type: 'short_term' | 'long_term';
+    status: 'pending' | 'in_progress' | 'achieved';
+    createdAt: number;
+}
+
+export interface FinancialRecord {
+    id: string;
+    patientId: string;
+    date: number;
+    concept: string;
+    amount: number;
+    status: 'paid' | 'pending' | 'overdue';
+    method: 'card' | 'transfer' | 'cash';
+}
+
+export interface Reminder {
+    id: string;
+    patientId: string;
+    psychologistId: string;
+    title: string;
+    date: number; // Target date
+    isCompleted: boolean;
 }
 
 // --- Survey & Task System ---
@@ -45,8 +109,8 @@ export interface SurveyQuestion {
   id: string;
   type: QuestionType;
   text: string;
-  options?: string[]; // For multiple choice
-  section?: string; // TO group questions (e.g., "Depresión", "Ansiedad")
+  options?: string[];
+  section?: string;
 }
 
 export interface SurveyTemplate {
@@ -85,8 +149,6 @@ export interface Task {
   createdAt: number;
 }
 
-// --- Educational Resources (Infographics) ---
-
 export interface EducationalResource {
     id: string;
     psychologistId: string;
@@ -105,13 +167,11 @@ export interface ResourceAssignment {
     assignedAt: number;
 }
 
-// --- Persistent Reports ---
-
 export interface PatientReport {
     id: string;
     patientId: string;
     psychologistId: string;
-    date: number; // Timestamp
+    date: number;
     content: {
         positives: string[];
         negatives: string[];
