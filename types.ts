@@ -184,10 +184,10 @@ export interface PatientReport {
 export interface Appointment {
     id: string;
     psychologistId: string;
-    patientId?: string; // If null, it's an available slot
+    patientId?: string; // If null/undefined, it might be a block
     startTime: number;
     endTime: number;
-    status: 'available' | 'booked' | 'cancelled' | 'completed';
+    status: 'booked' | 'blocked' | 'cancelled' | 'completed'; // Removed 'available' as we don't store them
     notes?: string;
     meetLink?: string;
 }
