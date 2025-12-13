@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 import { User, SurveyTemplate, QuestionType, SurveyQuestion, PatientReport, SurveyAssignment, EducationalResource } from '../types';
 import { getMyPatients, registerUser } from '../services/mockAuthService';
 import { saveSurveyTemplate, getTemplatesByPsychologist, assignSurveyToPatient, getReportsForPatient, getAssignmentsByPsychologist, getReportsByPsychologist, getAllSurveysForPatient, saveResource, getResourcesByPsychologist, assignResourceToPatient } from '../services/dataService';
@@ -13,17 +14,18 @@ interface Props {
     onSectionChange: (section: 'overview' | 'patients' | 'tools' | 'review') => void;
 }
 
-const StatCard: React.FC<{ title: string; value: number; icon: React.ReactNode; colorClass: string; onClick?: () => void }> = ({ title, value, icon, colorClass, onClick }) => (
+const StatCard: React.FC<{ title: string; value: string | number; subtitle?: string; icon: React.ReactNode; colorClass: string; onClick?: () => void }> = ({ title, value, subtitle, icon, colorClass, onClick }) => (
     <div 
         onClick={onClick}
         className={`bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center gap-4 transition-all shadow-lg ${onClick ? 'cursor-pointer hover:border-brand-500/50 hover:-translate-y-1 hover:shadow-brand-900/10' : ''}`}
     >
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClass}`}>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${colorClass}`}>
             {icon}
         </div>
         <div>
             <p className="text-2xl font-bold text-white">{value}</p>
             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{title}</p>
+            {subtitle && <p className="text-[10px] text-slate-600 mt-1">{subtitle}</p>}
         </div>
     </div>
 );
@@ -190,8 +192,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
     const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || (p.surnames && p.surnames.toLowerCase().includes(patientSearchTerm.toLowerCase())) || p.email.toLowerCase().includes(patientSearchTerm.toLowerCase()));
     
-    // Filter duplicates: Remove templates that match ID or Title of system templates
-    // This is robust against ID changes (e.g. string to uuid migration) by checking titles too
+    // Filter duplicates
     const displayTemplates = templates.filter(t => 
         t.id !== INITIAL_MENTAL_HEALTH_ASSESSMENT.id && 
         t.id !== BDI_II_ASSESSMENT.id &&
@@ -275,6 +276,56 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
         }
         return ( <div className="space-y-6 max-w-3xl">{assignment.responses?.map((resp, idx) => (<div key={idx} className="bg-slate-900 border border-slate-800 p-5 rounded-xl"><p className="text-brand-500 text-xs font-bold uppercase tracking-widest mb-2">Pregunta {idx + 1}</p><p className="text-slate-300 text-sm mb-3 font-medium border-b border-slate-800 pb-2">{getQuestionText(assignment.templateId, resp.questionId)}</p><p className="text-white text-lg font-light pl-2 border-l-2 border-brand-500">{resp.answer}</p></div>))}</div> );
     };
+
+    // Calculate Dynamic Stats for Modal
+    let modalStats = {
+        naretboxBalance: 0,
+        naretboxPositives: 0,
+        naretboxNegatives: 0,
+        completedTasks: 0,
+        pendingTasks: 0,
+        adherenceRate: 0,
+        chartData: [] as any[],
+        latestClinical: null as any
+    };
+
+    if (selectedPatientId && isViewingPatientDetails) {
+        // Naretbox Stats
+        modalStats.naretboxPositives = selectedPatientReports.reduce((acc, r) => acc + r.content.positives.length, 0);
+        modalStats.naretboxNegatives = selectedPatientReports.reduce((acc, r) => acc + r.content.negatives.length, 0);
+        modalStats.naretboxBalance = modalStats.naretboxPositives + modalStats.naretboxNegatives > 0 
+            ? Math.round((modalStats.naretboxPositives / (modalStats.naretboxPositives + modalStats.naretboxNegatives)) * 100) 
+            : 50;
+
+        // Chart Data (Last 7 reports)
+        modalStats.chartData = selectedPatientReports.slice(0, 7).reverse().map(r => ({
+            date: new Date(r.date).toLocaleDateString(undefined, {month:'short', day:'numeric'}),
+            Positivo: r.content.positives.length,
+            Negativo: r.content.negatives.length
+        }));
+
+        // Task Stats
+        modalStats.completedTasks = patientCompletedTasks.length;
+        modalStats.pendingTasks = patientPendingTasks.length;
+        modalStats.adherenceRate = (modalStats.completedTasks + modalStats.pendingTasks) > 0 
+            ? Math.round((modalStats.completedTasks / (modalStats.completedTasks + modalStats.pendingTasks)) * 100)
+            : 0;
+
+        // Latest Clinical Result
+        const latestInitial = patientCompletedTasks.find(t => t.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id);
+        const latestBDI = patientCompletedTasks.find(t => t.templateId === BDI_II_ASSESSMENT.id);
+        
+        // Prioritize newest
+        const newest = [latestInitial, latestBDI].sort((a,b) => (b?.completedAt || 0) - (a?.completedAt || 0))[0];
+        
+        if (newest && newest.responses) {
+            if (newest.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) {
+                modalStats.latestClinical = { type: 'Initial', ...calculateMentalHealthScore(newest.responses) };
+            } else if (newest.templateId === BDI_II_ASSESSMENT.id) {
+                modalStats.latestClinical = { type: 'BDI', ...calculateBDIScore(newest.responses) };
+            }
+        }
+    }
 
     const renderHeaderTitle = () => {
         switch(activeSection) {
@@ -501,17 +552,121 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                     onClick={() => setIsViewingPatientDetails(false)}
                 >
                     <div 
-                        className="bg-slate-900 w-full max-w-5xl h-[90vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scale-in"
+                        className="bg-slate-900 w-full max-w-6xl h-[90vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scale-in"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header */}
                         <div className="bg-slate-900 p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-                             <h2 className="text-2xl font-bold text-white">{getPatientName(selectedPatientId)}</h2>
-                             <button onClick={() => setIsViewingPatientDetails(false)} className="text-slate-500 hover:text-white">✕</button>
+                             <div>
+                                 <h2 className="text-2xl font-bold text-white">{getPatientName(selectedPatientId)}</h2>
+                                 <p className="text-xs text-slate-500 font-medium">Dashboard Clínico</p>
+                             </div>
+                             <button onClick={() => setIsViewingPatientDetails(false)} className="text-slate-500 hover:text-white bg-slate-800 p-2 rounded-full hover:bg-slate-700 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                             </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 bg-slate-950/30">
-                             {/* ... Stats & Charts ... */}
+                        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 bg-slate-950/50">
                              
+                             {/* --- CLINICAL DASHBOARD STATS --- */}
+                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <StatCard 
+                                    title="Informes Enviados" 
+                                    value={selectedPatientReports.length} 
+                                    icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+                                    colorClass="bg-indigo-500/20 text-indigo-400"
+                                />
+                                <StatCard 
+                                    title="Balance Emocional" 
+                                    value={`${modalStats.naretboxBalance}%`} 
+                                    subtitle="Positividad media"
+                                    icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                                    colorClass={modalStats.naretboxBalance > 50 ? "bg-emerald-500/20 text-emerald-400" : "bg-orange-500/20 text-orange-400"}
+                                />
+                                <StatCard 
+                                    title="Adherencia Tareas" 
+                                    value={`${modalStats.adherenceRate}%`} 
+                                    subtitle={`${modalStats.completedTasks} completadas / ${modalStats.completedTasks + modalStats.pendingTasks} totales`}
+                                    icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
+                                    colorClass="bg-brand-500/20 text-brand-400"
+                                />
+                                <StatCard 
+                                    title="Estado Reciente" 
+                                    value={modalStats.latestClinical ? (modalStats.latestClinical.hasSuicidalRisk ? "RIESGO" : "Seguimiento") : "Sin datos"}
+                                    icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+                                    colorClass={modalStats.latestClinical?.hasSuicidalRisk ? "bg-red-500/20 text-red-500" : "bg-slate-700/50 text-slate-400"}
+                                />
+                             </div>
+
+                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Chart Section */}
+                                <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-6">Evolución Emocional (Últimos 7 informes)</h3>
+                                    {modalStats.chartData.length > 0 ? (
+                                        <div className="h-64 w-full">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={modalStats.chartData}>
+                                                    <XAxis dataKey="date" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                                                    <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                                                    <RechartsTooltip 
+                                                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                                        itemStyle={{ color: '#fff' }}
+                                                        cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                                                    />
+                                                    <Bar dataKey="Positivo" fill="#10b981" radius={[4, 4, 0, 0]} stackId="a" />
+                                                    <Bar dataKey="Negativo" fill="#475569" radius={[4, 4, 0, 0]} stackId="a" />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    ) : (
+                                        <div className="h-64 flex items-center justify-center text-slate-500 text-sm italic border border-dashed border-slate-800 rounded-xl">
+                                            No hay suficientes datos de Naretbox.
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Clinical Snapshot */}
+                                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col">
+                                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-6">Última Evaluación Clínica</h3>
+                                    {modalStats.latestClinical ? (
+                                        <div className="space-y-6 my-auto">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-white font-bold">{modalStats.latestClinical.type === 'Initial' ? 'Evaluación Inicial' : 'BDI-II'}</span>
+                                                <span className={`text-xs px-2 py-1 rounded font-bold ${modalStats.latestClinical.color.replace('text-', 'bg-').replace('500', '500/20 text-white')}`}>
+                                                    {modalStats.latestClinical.level || modalStats.latestClinical.score}
+                                                </span>
+                                            </div>
+                                            
+                                            {modalStats.latestClinical.type === 'Initial' ? (
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <div className="flex justify-between text-xs mb-1 text-slate-400"><span>Depresión</span><span>{modalStats.latestClinical.depression.level}</span></div>
+                                                        <div className="h-1.5 bg-slate-800 rounded-full"><div className={`h-1.5 rounded-full ${modalStats.latestClinical.depression.color.replace('text-', 'bg-')}`} style={{width: `${(modalStats.latestClinical.depression.rawScore/15)*100}%`}}></div></div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex justify-between text-xs mb-1 text-slate-400"><span>Ansiedad</span><span>{modalStats.latestClinical.anxiety.level}</span></div>
+                                                        <div className="h-1.5 bg-slate-800 rounded-full"><div className={`h-1.5 rounded-full ${modalStats.latestClinical.anxiety.color.replace('text-', 'bg-')}`} style={{width: `${(modalStats.latestClinical.anxiety.rawScore/15)*100}%`}}></div></div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex justify-between text-xs mb-1 text-slate-400"><span>Estrés</span><span>{modalStats.latestClinical.stress.level}</span></div>
+                                                        <div className="h-1.5 bg-slate-800 rounded-full"><div className={`h-1.5 rounded-full ${modalStats.latestClinical.stress.color.replace('text-', 'bg-')}`} style={{width: `${(modalStats.latestClinical.stress.rawScore/12)*100}%`}}></div></div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-4">
+                                                    <p className="text-4xl font-bold text-white mb-1">{modalStats.latestClinical.score}</p>
+                                                    <p className={`text-sm font-bold ${modalStats.latestClinical.color}`}>{modalStats.latestClinical.level}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 flex items-center justify-center text-slate-500 text-sm italic text-center p-4">
+                                            El paciente no ha completado ninguna evaluación clínica estándar aún.
+                                        </div>
+                                    )}
+                                </div>
+                             </div>
+
+                             {/* --- MANAGEMENT SECTION --- */}
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {/* Assign Survey */}
                                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
