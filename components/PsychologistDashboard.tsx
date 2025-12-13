@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -245,6 +246,36 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
         } catch (error: any) { setCreateMsg('Error: ' + error.message); }
     };
 
+    const handleCreateTemplate = async () => {
+        if(!newTemplateTitle.trim() || questions.length === 0) return;
+        const temp: SurveyTemplate = {
+            id: crypto.randomUUID(),
+            psychologistId: user.id,
+            title: newTemplateTitle,
+            description: 'Plantilla personalizada',
+            questions,
+            createdAt: Date.now()
+        };
+        await saveSurveyTemplate(temp);
+        await fetchGlobalData();
+        setIsBuilderMode(false); setNewTemplateTitle(''); setQuestions([]);
+    };
+
+    const handleCreateResource = async () => {
+        if(!resTitle || !resUrl) return;
+        await saveResource({
+            id: crypto.randomUUID(),
+            psychologistId: user.id,
+            title: resTitle,
+            description: resDesc,
+            type: resType,
+            url: resUrl,
+            createdAt: Date.now()
+        });
+        await fetchGlobalData();
+        setIsResourceMode(false); setResTitle(''); setResDesc(''); setResUrl('');
+    };
+
     const saveBasicInfo = async () => {
         if (!selectedPatientId) return;
         try {
@@ -259,7 +290,6 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     const saveClinicalInfo = async () => {
         if (!selectedPatientId) return;
         try {
-            // Ensure array type for pre-existing conditions if user entered comma-separated string
             const profileToSave = { ...clinicalForm, userId: selectedPatientId };
             if(typeof profileToSave.preexistingConditions === 'string') {
                 profileToSave.preexistingConditions = (profileToSave.preexistingConditions as string).split(',').map((s: string) => s.trim());
@@ -369,7 +399,6 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     };
 
     const modalStats = useMemo(() => {
-        // Naretbox Chart Data
         const naretData = (selectedPatientReports || [])
             .sort((a, b) => a.date - b.date)
             .slice(-7)
@@ -379,7 +408,6 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                 Negativo: r.content.negatives.length
             }));
 
-        // BDI Score Evolution Data
         const bdiData = (patientSurveys || [])
             .filter(s => s.status === 'completed' && s.templateId === BDI_II_ASSESSMENT.id && s.responses)
             .sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0))
@@ -393,17 +421,9 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
     const activeTasks = useMemo(() => patientSurveys.filter(s => s.status === 'pending'), [patientSurveys]);
 
-    // --- UTILS ---
-    const getQuestionText = (templateId: string, qId: string) => { 
-        if (templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) { const q = INITIAL_MENTAL_HEALTH_ASSESSMENT.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta'; } 
-        if (templateId === BDI_II_ASSESSMENT.id) { const q = BDI_II_ASSESSMENT.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta'; } 
-        const temp = templates.find(t => t.id === templateId); if (!temp) return 'Pregunta no encontrada'; const q = temp.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta eliminada'; 
-    };
-
+    const getPatientName = (id: string) => { const p = patients.find(pat => pat.id === id); return p ? `${p.name} ${p.surnames || ''}` : 'Usuario desconocido'; };
     const displayTemplates = templates.filter(t => t.id !== INITIAL_MENTAL_HEALTH_ASSESSMENT.id && t.id !== BDI_II_ASSESSMENT.id);
 
-    // --- RENDER MAIN UI ---
-    
     return (
         <div className="p-6 md:p-8 animate-fade-in max-w-7xl mx-auto pb-24 space-y-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-800 pb-6">
@@ -463,6 +483,159 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                                 <div className="text-xs text-brand-400 font-bold uppercase tracking-wider">Ver Expediente Clínico &rarr;</div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* TOOLS TAB */}
+            {activeSection === 'tools' && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="flex gap-4 border-b border-slate-800">
+                        <button onClick={() => setToolSubTab('surveys')} className={`pb-3 px-2 font-bold ${toolSubTab === 'surveys' ? 'text-brand-500 border-b-2 border-brand-500' : 'text-slate-500'}`}>Encuestas y Tests</button>
+                        <button onClick={() => setToolSubTab('resources')} className={`pb-3 px-2 font-bold ${toolSubTab === 'resources' ? 'text-brand-500 border-b-2 border-brand-500' : 'text-slate-500'}`}>Recursos Educativos</button>
+                    </div>
+
+                    {toolSubTab === 'surveys' && (
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-white">Mis Plantillas</h3>
+                                <button onClick={() => setIsBuilderMode(true)} className="bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-bold">Crear Nueva</button>
+                            </div>
+
+                            {/* Builder UI */}
+                            {isBuilderMode && (
+                                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+                                    <input className="w-full bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" placeholder="Título de la Encuesta" value={newTemplateTitle} onChange={e => setNewTemplateTitle(e.target.value)} />
+                                    
+                                    <div className="space-y-2">
+                                        {questions.map((q, idx) => (
+                                            <div key={idx} className="bg-slate-950 p-3 rounded border border-slate-800 flex justify-between items-center">
+                                                <span className="text-white text-sm">{idx + 1}. {q.text}</span>
+                                                <span className="text-xs text-slate-500 uppercase">{q.type}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-800">
+                                        <button onClick={() => {
+                                            const text = prompt("Texto de la pregunta:");
+                                            if(text) setQuestions([...questions, { id: crypto.randomUUID(), type: 'text', text }]);
+                                        }} className="bg-slate-800 p-2 rounded text-slate-300 text-sm hover:text-white">Añadir Texto Libre</button>
+                                        <button onClick={() => {
+                                            const text = prompt("Texto de la pregunta (1-10):");
+                                            if(text) setQuestions([...questions, { id: crypto.randomUUID(), type: 'scale', text }]);
+                                        }} className="bg-slate-800 p-2 rounded text-slate-300 text-sm hover:text-white">Añadir Escala 1-10</button>
+                                    </div>
+
+                                    <div className="flex justify-end gap-2 mt-4">
+                                        <button onClick={() => setIsBuilderMode(false)} className="text-slate-500 px-4">Cancelar</button>
+                                        <button onClick={handleCreateTemplate} className="bg-emerald-500 text-white px-4 py-2 rounded font-bold">Guardar Plantilla</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl opacity-75">
+                                    <h4 className="font-bold text-white mb-1">{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</h4>
+                                    <p className="text-xs text-slate-500">Sistema (Solo lectura)</p>
+                                </div>
+                                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl opacity-75">
+                                    <h4 className="font-bold text-white mb-1">{BDI_II_ASSESSMENT.title}</h4>
+                                    <p className="text-xs text-slate-500">Sistema (Solo lectura)</p>
+                                </div>
+                                {displayTemplates.map(t => (
+                                    <div key={t.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center group cursor-pointer hover:border-brand-500/50" onClick={() => setViewingTemplate(t)}>
+                                        <div>
+                                            <h4 className="font-bold text-white mb-1">{t.title}</h4>
+                                            <p className="text-xs text-slate-500">{t.questions.length} preguntas</p>
+                                        </div>
+                                        <span className="text-brand-400 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">Ver &rarr;</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {toolSubTab === 'resources' && (
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-white">Biblioteca de Recursos</h3>
+                                <button onClick={() => setIsResourceMode(true)} className="bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-bold">Añadir Recurso</button>
+                            </div>
+
+                            {/* Resource Builder */}
+                            {isResourceMode && (
+                                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+                                    <input className="w-full bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" placeholder="Título" value={resTitle} onChange={e => setResTitle(e.target.value)} />
+                                    <textarea className="w-full bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" placeholder="Descripción breve" value={resDesc} onChange={e => setResDesc(e.target.value)} />
+                                    <div className="flex gap-2">
+                                        <select className="bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" value={resType} onChange={e => setResType(e.target.value as any)}>
+                                            <option value="image">Imagen</option>
+                                            <option value="pdf">PDF</option>
+                                            <option value="video">Video</option>
+                                            <option value="link">Enlace</option>
+                                        </select>
+                                        <input className="flex-1 bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" placeholder="URL del recurso" value={resUrl} onChange={e => setResUrl(e.target.value)} />
+                                    </div>
+                                    <div className="flex justify-end gap-2 mt-4">
+                                        <button onClick={() => setIsResourceMode(false)} className="text-slate-500 px-4">Cancelar</button>
+                                        <button onClick={handleCreateResource} className="bg-emerald-500 text-white px-4 py-2 rounded font-bold">Guardar</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {resources.map(r => (
+                                    <div key={r.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                                        <div className="flex justify-between items-start">
+                                            <h4 className="font-bold text-white text-sm">{r.title}</h4>
+                                            <span className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-400 uppercase">{r.type}</span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-2 line-clamp-2">{r.description}</p>
+                                        <a href={r.url} target="_blank" rel="noreferrer" className="text-indigo-400 text-xs mt-3 block hover:underline truncate">{r.url}</a>
+                                    </div>
+                                ))}
+                                {resources.length === 0 && <p className="text-slate-500 italic">No hay recursos creados.</p>}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* REVIEW TAB */}
+            {activeSection === 'review' && (
+                <div className="space-y-8 animate-fade-in">
+                    <h2 className="text-xl font-bold text-slate-200">Revisión General</h2>
+                    
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                        <h3 className="text-lg font-bold text-white mb-6">Actividad Reciente</h3>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-slate-300 text-sm">
+                                <thead className="bg-slate-950/50 text-slate-500 text-xs uppercase">
+                                    <tr>
+                                        <th className="px-4 py-3">Paciente</th>
+                                        <th className="px-4 py-3">Actividad</th>
+                                        <th className="px-4 py-3">Fecha</th>
+                                        <th className="px-4 py-3 text-right">Detalle</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {assignments.filter(a => a.status === 'completed').slice(0, 10).map(a => (
+                                        <tr key={a.id} className="hover:bg-slate-800/30">
+                                            <td className="px-4 py-3 font-bold text-white">{getPatientName(a.patientId)}</td>
+                                            <td className="px-4 py-3">{a.templateTitle}</td>
+                                            <td className="px-4 py-3 text-slate-500">{new Date(a.completedAt || 0).toLocaleDateString()}</td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button onClick={() => setViewingAssignment(a)} className="text-brand-400 hover:text-brand-300 font-bold text-xs">Ver Resultados</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {assignments.filter(a => a.status === 'completed').length === 0 && (
+                                        <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500 italic">No hay actividad reciente.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             )}
