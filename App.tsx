@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, ViewState } from './types';
 import LandingPage from './components/LandingPage';
@@ -15,11 +14,11 @@ const Sidebar: React.FC<{
     onLogout: () => void,
     role: string,
     psychActiveTab?: string,
-    onPsychTabChange?: (tab: 'overview' | 'patients' | 'tools' | 'review') => void
+    onPsychTabChange?: (tab: 'overview' | 'patients' | 'tools' | 'review' | 'schedule') => void
 }> = ({ currentView, onChangeView, onLogout, role, psychActiveTab, onPsychTabChange }) => {
     
     // Explicit handler to ensure navigation state updates correctly
-    const handlePsychNav = (tab: 'overview' | 'patients' | 'tools' | 'review') => {
+    const handlePsychNav = (tab: 'overview' | 'patients' | 'tools' | 'review' | 'schedule') => {
         // 1. Update the tab state first
         if (onPsychTabChange) {
             onPsychTabChange(tab);
@@ -83,6 +82,15 @@ const Sidebar: React.FC<{
                             Pacientes
                         </button>
                         <button 
+                            onClick={() => handlePsychNav('schedule')}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'schedule' ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Agenda
+                        </button>
+                        <button 
                             onClick={() => handlePsychNav('tools')}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'tools' ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
                         >
@@ -137,10 +145,10 @@ const MobileNav: React.FC<{
     onChangeView: (v: ViewState) => void,
     role: string,
     psychActiveTab?: string,
-    onPsychTabChange?: (tab: 'overview' | 'patients' | 'tools' | 'review') => void
+    onPsychTabChange?: (tab: 'overview' | 'patients' | 'tools' | 'review' | 'schedule') => void
 }> = ({ currentView, onChangeView, role, psychActiveTab, onPsychTabChange }) => {
 
-    const handlePsychNav = (tab: 'overview' | 'patients' | 'tools' | 'review') => {
+    const handlePsychNav = (tab: 'overview' | 'patients' | 'tools' | 'review' | 'schedule') => {
         if (onPsychTabChange) {
             onPsychTabChange(tab);
         }
@@ -196,6 +204,15 @@ const MobileNav: React.FC<{
                         </svg>
                         <span className="text-[10px] font-bold">Pacientes</span>
                     </button>
+                     <button 
+                        onClick={() => handlePsychNav('schedule')}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'schedule' ? 'text-brand-500' : 'text-slate-500'}`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-[10px] font-bold">Agenda</span>
+                    </button>
                     <button 
                         onClick={() => handlePsychNav('tools')}
                         className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'tools' ? 'text-brand-500' : 'text-slate-500'}`}
@@ -204,15 +221,6 @@ const MobileNav: React.FC<{
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                         </svg>
                         <span className="text-[10px] font-bold">Herram.</span>
-                    </button>
-                     <button 
-                        onClick={() => handlePsychNav('review')}
-                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${currentView === 'psych-dashboard' && psychActiveTab === 'review' ? 'text-brand-500' : 'text-slate-500'}`}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span className="text-[10px] font-bold">Result.</span>
                     </button>
                  </>
              )}
@@ -223,7 +231,7 @@ const MobileNav: React.FC<{
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('landing');
-  const [psychView, setPsychView] = useState<'overview' | 'patients' | 'tools' | 'review'>('overview');
+  const [psychView, setPsychView] = useState<'overview' | 'patients' | 'tools' | 'review' | 'schedule'>('overview');
   const [isLoading, setIsLoading] = useState(true);
 
   // Initial Load with Async Check

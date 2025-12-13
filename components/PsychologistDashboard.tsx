@@ -2,20 +2,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import { User, SurveyTemplate, QuestionType, SurveyQuestion, PatientReport, SurveyAssignment, EducationalResource, ClinicalProfile, ClinicalSession, TreatmentGoal, FinancialRecord, Reminder } from '../types';
+import { User, SurveyTemplate, QuestionType, SurveyQuestion, PatientReport, SurveyAssignment, EducationalResource, ClinicalProfile, ClinicalSession, TreatmentGoal, FinancialRecord, Reminder, Appointment } from '../types';
 import { getMyPatients, registerUser } from '../services/mockAuthService';
 import { 
     saveSurveyTemplate, getTemplatesByPsychologist, assignSurveyToPatient, getReportsForPatient, getAssignmentsByPsychologist, getReportsByPsychologist, getAllSurveysForPatient, saveResource, getResourcesByPsychologist, assignResourceToPatient,
     // New Services
-    updatePatientBasicInfo, getClinicalProfile, saveClinicalProfile, getClinicalSessions, saveClinicalSession, getTreatmentGoals, saveTreatmentGoal, updateTreatmentGoalStatus, getFinancials, saveFinancialRecord, getReminders, saveReminder
+    updatePatientBasicInfo, getClinicalProfile, saveClinicalProfile, getClinicalSessions, saveClinicalSession, getTreatmentGoals, saveTreatmentGoal, updateTreatmentGoalStatus, getFinancials, saveFinancialRecord, getReminders, saveReminder,
+    // Appointments
+    getAppointments, createAppointmentSlot, deleteAppointmentSlot
 } from '../services/dataService';
 import { INITIAL_MENTAL_HEALTH_ASSESSMENT, BDI_II_ASSESSMENT } from '../constants';
 import { calculateMentalHealthScore, calculateBDIScore } from '../services/scoringService';
 
 interface Props {
     user: User;
-    activeSection: 'overview' | 'patients' | 'tools' | 'review';
-    onSectionChange: (section: 'overview' | 'patients' | 'tools' | 'review') => void;
+    activeSection: 'overview' | 'patients' | 'tools' | 'review' | 'schedule';
+    onSectionChange: (section: 'overview' | 'patients' | 'tools' | 'review' | 'schedule') => void;
 }
 
 const StatCard: React.FC<{ title: string; value: string | number; subtitle?: string; icon: React.ReactNode; colorClass: string; onClick?: () => void }> = ({ title, value, subtitle, icon, colorClass, onClick }) => (
@@ -104,6 +106,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     const [assignments, setAssignments] = useState<SurveyAssignment[]>([]);
     const [allReports, setAllReports] = useState<PatientReport[]>([]);
     const [resources, setResources] = useState<EducationalResource[]>([]);
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
     
     // Tools Sub-Tab
     const [toolSubTab, setToolSubTab] = useState<'surveys' | 'resources'>('surveys');
@@ -131,6 +134,11 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     const [resDesc, setResDesc] = useState('');
     const [resType, setResType] = useState<'image' | 'pdf' | 'video' | 'link'>('image');
     const [resUrl, setResUrl] = useState('');
+
+    // Appointment State
+    const [newSlotDate, setNewSlotDate] = useState('');
+    const [newSlotTime, setNewSlotTime] = useState('');
+    const [newSlotDuration, setNewSlotDuration] = useState(60); // minutes
 
     // --- PATIENT MODAL / CLINICAL RECORD STATE ---
     const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -202,6 +210,8 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             setAllReports(myReports);
             const myResources = await getResourcesByPsychologist(user.id);
             setResources(myResources);
+            const myApps = await getAppointments(user.id, 'psychologist');
+            setAppointments(myApps);
         } catch (error) { console.error(error); }
     };
 
@@ -274,6 +284,31 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
         });
         await fetchGlobalData();
         setIsResourceMode(false); setResTitle(''); setResDesc(''); setResUrl('');
+    };
+
+    const handleCreateSlot = async () => {
+        if (!newSlotDate || !newSlotTime) return;
+        const start = new Date(`${newSlotDate}T${newSlotTime}`).getTime();
+        const end = start + newSlotDuration * 60000;
+        
+        try {
+            await createAppointmentSlot({
+                psychologistId: user.id,
+                startTime: start,
+                endTime: end,
+                meetLink: '' 
+            });
+            await fetchGlobalData();
+            setNewSlotDate(''); setNewSlotTime('');
+        } catch(e) { alert("Error al crear hueco."); }
+    };
+
+    const handleDeleteSlot = async (id: string) => {
+        if(!confirm("¿Eliminar este hueco de la agenda?")) return;
+        try {
+            await deleteAppointmentSlot(id);
+            await fetchGlobalData();
+        } catch(e) { alert("Error al eliminar."); }
     };
 
     const saveBasicInfo = async () => {
@@ -599,6 +634,53 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* SCHEDULE TAB (Agenda) */}
+            {activeSection === 'schedule' && (
+                <div className="space-y-8 animate-fade-in">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-xl font-bold text-slate-200">Agenda y Citas</h2>
+                        
+                        <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex gap-3 items-center">
+                            <input type="date" className="bg-slate-800 text-white text-sm p-2 rounded border border-slate-700" value={newSlotDate} onChange={e => setNewSlotDate(e.target.value)} />
+                            <input type="time" className="bg-slate-800 text-white text-sm p-2 rounded border border-slate-700" value={newSlotTime} onChange={e => setNewSlotTime(e.target.value)} />
+                            <button onClick={handleCreateSlot} className="bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded text-sm font-bold">
+                                + Abrir Hueco
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 overflow-hidden">
+                        <h3 className="text-lg font-bold text-white mb-6">Próximas Sesiones</h3>
+                        
+                        {appointments.length === 0 ? (
+                            <p className="text-slate-500 italic">No hay citas programadas ni huecos abiertos.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {appointments.map(app => (
+                                    <div key={app.id} className="flex items-center justify-between p-4 bg-slate-950/50 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-3 h-3 rounded-full ${app.status === 'booked' ? 'bg-indigo-500' : 'bg-emerald-500'}`}></div>
+                                            <div>
+                                                <p className="font-bold text-white text-sm">
+                                                    {new Date(app.startTime).toLocaleDateString()} - {new Date(app.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {app.status === 'booked' ? `Paciente: ${getPatientName(app.patientId || '')}` : 'Disponible para reserva'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {app.meetLink && <a href={app.meetLink} target="_blank" className="text-xs text-indigo-400 border border-indigo-500/30 px-3 py-1 rounded hover:bg-indigo-500/10">Link</a>}
+                                            <button onClick={() => handleDeleteSlot(app.id)} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/10">Eliminar</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 

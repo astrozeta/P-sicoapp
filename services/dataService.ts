@@ -1,6 +1,6 @@
 
 import { supabase, IS_SUPABASE_CONFIGURED } from '../supabaseClient';
-import { Entry, SurveyTemplate, SurveyAssignment, PatientReport, EducationalResource, User, ClinicalProfile, ClinicalSession, TreatmentGoal, FinancialRecord, Reminder } from '../types';
+import { Entry, SurveyTemplate, SurveyAssignment, PatientReport, EducationalResource, User, ClinicalProfile, ClinicalSession, TreatmentGoal, FinancialRecord, Reminder, Appointment } from '../types';
 import { LOCAL_STORAGE_KEY } from '../constants';
 
 // --- Local Storage Helpers (Legacy/Fallback) ---
@@ -214,6 +214,127 @@ export const saveReminder = async (reminder: Omit<Reminder, 'id'>) => {
     if (error) throw error;
 };
 
+// --- APPOINTMENTS (Citas) ---
+
+export const getAppointments = async (userId: string, role: 'patient' | 'psychologist'): Promise<Appointment[]> => {
+    if (!IS_SUPABASE_CONFIGURED) {
+        // Local fallback
+        const all = getLocalData('naret_appointments');
+        if (role === 'psychologist') {
+            return all.filter((a: any) => a.psychologistId === userId);
+        } else {
+            // Patient sees their own booked appointments AND available slots from their psychologist
+            // But we need the patient's assigned psychologist ID here. 
+            // Simplified for local: return where patientId matches OR it's available
+            return all.filter((a: any) => a.patientId === userId || (a.status === 'available')); 
+        }
+    }
+
+    let query = supabase.from('appointments').select('*');
+
+    if (role === 'psychologist') {
+        query = query.eq('psychologist_id', userId);
+    } else {
+        // Complex query for patients: My appointments OR (Available appointments from my psych)
+        // Since Supabase simple filtering is limited, we filter relevant ones in memory or separate calls.
+        // For efficiency, let's fetch based on user relation.
+        // Strategy: Get user profile first to find psychologist, then query.
+        const { data: profile } = await supabase.from('profiles').select('assigned_psychologist_id').eq('id', userId).single();
+        const psychId = profile?.assigned_psychologist_id;
+
+        if (psychId) {
+             query = query.or(`patient_id.eq.${userId},and(psychologist_id.eq.${psychId},status.eq.available)`);
+        } else {
+             query = query.eq('patient_id', userId);
+        }
+    }
+
+    const { data, error } = await query.order('start_time', { ascending: true });
+    
+    if (error) return [];
+
+    return data.map((a: any) => ({
+        id: a.id,
+        psychologistId: a.psychologist_id,
+        patientId: a.patient_id,
+        startTime: parseInt(a.start_time),
+        endTime: parseInt(a.end_time),
+        status: a.status,
+        notes: a.notes,
+        meetLink: a.meet_link
+    }));
+};
+
+export const createAppointmentSlot = async (slot: Omit<Appointment, 'id' | 'patientId' | 'status'>) => {
+    if (!IS_SUPABASE_CONFIGURED) {
+        const apps = getLocalData('naret_appointments');
+        apps.push({ ...slot, id: crypto.randomUUID(), status: 'available', patientId: null });
+        saveLocalData('naret_appointments', apps);
+        return;
+    }
+
+    const { error } = await supabase.from('appointments').insert([{
+        psychologist_id: slot.psychologistId,
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        status: 'available',
+        meet_link: slot.meetLink
+    }]);
+
+    if (error) throw error;
+};
+
+export const bookAppointment = async (appointmentId: string, patientId: string) => {
+    if (!IS_SUPABASE_CONFIGURED) {
+        const apps = getLocalData('naret_appointments');
+        const idx = apps.findIndex((a: any) => a.id === appointmentId);
+        if (idx !== -1) {
+            apps[idx].status = 'booked';
+            apps[idx].patientId = patientId;
+            saveLocalData('naret_appointments', apps);
+        }
+        return;
+    }
+
+    const { error } = await supabase.from('appointments')
+        .update({ status: 'booked', patient_id: patientId })
+        .eq('id', appointmentId);
+    
+    if (error) throw error;
+};
+
+export const cancelAppointment = async (appointmentId: string) => {
+    if (!IS_SUPABASE_CONFIGURED) {
+        const apps = getLocalData('naret_appointments');
+        const idx = apps.findIndex((a: any) => a.id === appointmentId);
+        if (idx !== -1) {
+            // If it was booked, make it available again? Or cancel it entirely?
+            // Let's make it available again for simplicity if cancelling.
+            apps[idx].status = 'available';
+            apps[idx].patientId = null; 
+            saveLocalData('naret_appointments', apps);
+        }
+        return;
+    }
+
+    // Logic: Reset to available and remove patient
+    const { error } = await supabase.from('appointments')
+        .update({ status: 'available', patient_id: null })
+        .eq('id', appointmentId);
+
+    if (error) throw error;
+};
+
+export const deleteAppointmentSlot = async (appointmentId: string) => {
+    if (!IS_SUPABASE_CONFIGURED) {
+        const apps = getLocalData('naret_appointments');
+        saveLocalData('naret_appointments', apps.filter((a: any) => a.id !== appointmentId));
+        return;
+    }
+    const { error } = await supabase.from('appointments').delete().eq('id', appointmentId);
+    if(error) throw error;
+}
+
 
 // --- EXISTING SERVICES (Keep functionality) ---
 
@@ -350,4 +471,3 @@ export const getAssignedResourcesForPatient = async (patientId: string): Promise
     if (error) return [];
     return data.map((item: any) => { const r = item.resources; if(!r) return null; return { id: r.id, psychologistId: r.psychologist_id, title: r.title, description: r.description, type: r.type, url: r.url, createdAt: r.created_at }; }).filter(Boolean) as EducationalResource[];
 };
-

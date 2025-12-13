@@ -180,4 +180,16 @@ export interface PatientReport {
     wasEmailed: boolean;
 }
 
+// --- APPOINTMENTS SYSTEM ---
+export interface Appointment {
+    id: string;
+    psychologistId: string;
+    patientId?: string; // If null, it's an available slot
+    startTime: number;
+    endTime: number;
+    status: 'available' | 'booked' | 'cancelled' | 'completed';
+    notes?: string;
+    meetLink?: string;
+}
+
 export type ViewState = 'landing' | 'hub' | 'tool-naretbox' | 'tool-survey' | 'psych-dashboard' | 'admin-dashboard' | 'settings';

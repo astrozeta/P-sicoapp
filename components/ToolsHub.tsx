@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, SurveyAssignment, EducationalResource } from '../types';
 import { getAllSurveysForPatient, getEntries, getAssignedResourcesForPatient } from '../services/dataService';
 import SurveyTaker from './SurveyTaker';
+import AppointmentsPatientView from './AppointmentsPatientView';
 
 interface ToolsHubProps {
   onSelectTool: (tool: 'naretbox') => void;
@@ -10,6 +12,7 @@ interface ToolsHubProps {
 
 const ToolsHub: React.FC<ToolsHubProps> = ({ onSelectTool, user }) => {
   const [activeSurvey, setActiveSurvey] = useState<SurveyAssignment | null>(null);
+  const [showAppointments, setShowAppointments] = useState(false);
   const [assignments, setAssignments] = useState<SurveyAssignment[]>([]);
   const [resources, setResources] = useState<EducationalResource[]>([]);
   const [naretboxCount, setNaretboxCount] = useState(0);
@@ -36,6 +39,7 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ onSelectTool, user }) => {
   const completed = assignments.filter(a => a.status === 'completed');
 
   if (activeSurvey) { return <SurveyTaker assignment={activeSurvey} onComplete={handleSurveyComplete} onCancel={() => setActiveSurvey(null)} />; }
+  if (showAppointments) { return <AppointmentsPatientView user={user} onClose={() => setShowAppointments(false)} />; }
 
   return (
     <div className="space-y-8 animate-fade-in pb-24 md:pb-8 max-w-7xl mx-auto">
@@ -51,7 +55,29 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ onSelectTool, user }) => {
         </div>
       </div>
 
-      {/* NOTIFICATION AREA - FEEDBACK DE TAREAS */}
+      {/* QUICK ACTIONS ROW */}
+      <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => setShowAppointments(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-2xl shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-3 transition-all"
+          >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="font-bold">Gestionar Citas</span>
+          </button>
+          <button 
+            onClick={() => onSelectTool('naretbox')}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-2xl shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-3 transition-all"
+          >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span className="font-bold">Diario Emocional</span>
+          </button>
+      </div>
+
+      {/* NOTIFICATION AREA */}
       {pending.length > 0 && (
           <div className="bg-gradient-to-r from-brand-900/40 to-slate-900 border border-brand-500/30 rounded-2xl p-6 flex items-start md:items-center gap-4 animate-slide-up shadow-lg shadow-brand-900/10">
               <div className="bg-brand-500/20 p-3 rounded-xl text-brand-500 shrink-0">
