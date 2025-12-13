@@ -524,97 +524,9 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                 </div>
             )}
 
-            {/* REVIEW TAB */}
-            {activeSection === 'review' && (
-                <div className="space-y-6 animate-fade-in">
-                     <div className="flex items-center gap-4 mb-4">
-                        <h2 className="text-xl font-bold text-slate-200">Resultados y Seguimiento</h2>
-                        {(filterPatient !== 'all' || filterRisk || filterTemplate !== 'all' || filterType !== 'all') && (
-                            <button onClick={() => { setFilterPatient('all'); setFilterRisk(false); setFilterTemplate('all'); setFilterType('all'); }} className="text-xs text-brand-400 hover:text-white underline">
-                                Limpiar Filtros
-                            </button>
-                        )}
-                     </div>
-                     
-                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        {/* Filters Sidebar */}
-                        <div className="md:col-span-1 space-y-6">
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Filtrar por Paciente</h3>
-                                <select className="w-full bg-slate-950 text-white p-2 rounded-lg border border-slate-700 text-sm" value={filterPatient} onChange={(e) => setFilterPatient(e.target.value)}>
-                                    <option value="all">Todos los Pacientes</option>
-                                    {patients.map(p => <option key={p.id} value={p.id}>{p.name} {p.surnames}</option>)}
-                                </select>
-                            </div>
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Tipo de Prueba</h3>
-                                <div className="space-y-2">
-                                    <button onClick={() => setFilterType('all')} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${filterType === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>Todo</button>
-                                    <button onClick={() => setFilterType('survey')} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${filterType === 'survey' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>Encuestas</button>
-                                    <button onClick={() => setFilterType('naretbox')} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${filterType === 'naretbox' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>Naretbox</button>
-                                </div>
-                            </div>
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" checked={filterRisk} onChange={(e) => setFilterRisk(e.target.checked)} className="w-5 h-5 rounded border-slate-600 text-red-500 focus:ring-red-500 bg-slate-800" />
-                                    <span className="text-sm font-bold text-red-400">Solo Alertas de Riesgo</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        {/* Results Feed */}
-                        <div className="md:col-span-3 space-y-4">
-                            {unifiedResults.length === 0 ? (
-                                <div className="text-center py-12 bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed text-slate-500">No se encontraron resultados con estos filtros.</div>
-                            ) : (
-                                unifiedResults.map((item, idx) => (
-                                    <div key={`${item.type}-${item.id}`} className={`bg-slate-900 border ${item.isRisk ? 'border-red-500/50 shadow-lg shadow-red-900/20' : 'border-slate-800'} p-6 rounded-2xl hover:border-slate-600 transition-all ${item.isRisk ? 'animate-pulse-slow' : ''}`}>
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${item.type === 'survey' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                                    {item.type === 'survey' ? (
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                                                    ) : (
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-white text-lg">{item.title}</h3>
-                                                    <p className="text-xs text-slate-400">{getPatientName(item.patientId)} • {new Date(item.date).toLocaleDateString()}</p>
-                                                </div>
-                                            </div>
-                                            {item.isRisk && (
-                                                <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">RIESGO DETECTADO</span>
-                                            )}
-                                        </div>
-                                        
-                                        {/* Preview Content */}
-                                        <div className="pl-14">
-                                            {item.type === 'naretbox' ? (
-                                                <div className="space-y-2">
-                                                    <div className="flex gap-2 text-sm"><span className="text-emerald-400 font-bold">Positivos:</span> <span className="text-slate-300">{(item.details as PatientReport).content.positives.length}</span></div>
-                                                    <div className="flex gap-2 text-sm"><span className="text-slate-400 font-bold">Negativos:</span> <span className="text-slate-300">{(item.details as PatientReport).content.negatives.length}</span></div>
-                                                    <p className="text-xs text-slate-500 mt-2 line-clamp-2">{(item.details as PatientReport).content.summary}</p>
-                                                    <button onClick={() => { setSelectedReport(item.details as PatientReport); }} className="mt-2 text-indigo-400 text-xs font-bold hover:text-white underline">Ver Informe Completo</button>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-2">
-                                                    <div className="text-sm text-slate-400">Encuesta completada.</div>
-                                                    <button onClick={() => { setViewingAssignment(item.details as SurveyAssignment); }} className="mt-2 text-indigo-400 text-xs font-bold hover:text-white underline">Ver Resultados Detallados</button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                     </div>
-                </div>
-            )}
-
             {/* PATIENT DETAILS MODAL WITH RESOURCE ASSIGNMENT */}
             {isViewingPatientDetails && selectedPatientId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
                     <div className="bg-slate-900 w-full max-w-5xl h-[90vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scale-in">
                         {/* Header */}
                         <div className="bg-slate-900 p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
@@ -691,7 +603,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
             {/* Modal for Survey Results */}
             {viewingAssignment && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
                     <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col">
                         <div className="p-6 border-b border-slate-700 flex justify-between items-center">
                             <div>
@@ -709,7 +621,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             
             {/* Modal for Template PREVIEW */}
             {viewingTemplate && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
                     <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col">
                         <div className="p-6 border-b border-slate-700 flex justify-between items-center">
                             <div>
@@ -750,7 +662,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
             {/* Modal for Patient Report */}
             {selectedReport && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
                     <div className="bg-slate-900 w-full max-w-2xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col">
                         <div className="p-6 border-b border-slate-700 flex justify-between items-center">
                             <div>
