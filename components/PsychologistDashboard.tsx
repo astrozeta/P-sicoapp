@@ -110,6 +110,9 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     
     // Tools Sub-Tab
     const [toolSubTab, setToolSubTab] = useState<'surveys' | 'resources'>('surveys');
+    
+    // Schedule Sub-Tab (Visual vs List)
+    const [scheduleViewType, setScheduleViewType] = useState<'calendar' | 'list'>('calendar');
 
     // Patient Search
     const [patientSearchTerm, setPatientSearchTerm] = useState('');
@@ -674,89 +677,128 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                 <div className="space-y-6 animate-fade-in">
                     <div className="flex justify-between items-center mb-4">
                         <div>
-                            <h2 className="text-xl font-bold text-slate-200">Agenda Semanal</h2>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-xl font-bold text-slate-200">Agenda Semanal</h2>
+                                <span className="bg-brand-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Nuevo Visual</span>
+                            </div>
                             <p className="text-xs text-slate-500">Gestión visual de citas y bloqueos.</p>
                         </div>
-                        <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800">
-                            <button onClick={handlePrevWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                            </button>
-                            <span className="px-4 text-sm font-bold text-white min-w-[150px] text-center">
-                                {currentWeekStart.toLocaleDateString()} - {new Date(currentWeekStart.getTime() + 4 * 86400000).toLocaleDateString()}
-                            </span>
-                            <button onClick={handleNextWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                            </button>
+                        
+                        <div className="flex gap-4">
+                            <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800">
+                                <button onClick={() => setScheduleViewType('calendar')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${scheduleViewType === 'calendar' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Grilla</button>
+                                <button onClick={() => setScheduleViewType('list')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${scheduleViewType === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Lista</button>
+                            </div>
+
+                            <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800">
+                                <button onClick={handlePrevWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                </button>
+                                <span className="px-4 text-sm font-bold text-white min-w-[150px] text-center">
+                                    {currentWeekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(currentWeekStart.getTime() + 4 * 86400000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                                <button onClick={handleNextWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl overflow-x-auto">
-                        <div className="min-w-[800px]">
-                            {/* Calendar Header */}
-                            <div className="grid grid-cols-[60px_repeat(5,1fr)] border-b border-slate-800 bg-slate-950/50">
-                                <div className="p-4 border-r border-slate-800 flex items-center justify-center text-xs font-bold text-slate-500">
-                                    HORA
+                    {scheduleViewType === 'list' ? (
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <p className="text-slate-500 mb-4 text-sm">Vista simplificada de listado.</p>
+                            {appointments.length === 0 ? <p className="text-slate-500 italic">No hay citas registradas.</p> : (
+                                <ul className="space-y-2">
+                                    {appointments.map(a => (
+                                        <li key={a.id} className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center">
+                                            <div>
+                                                <p className="text-white font-bold">{new Date(a.startTime).toLocaleString()}</p>
+                                                <p className="text-xs text-slate-500">{a.status === 'blocked' ? 'Bloqueado' : getPatientName(a.patientId || '')}</p>
+                                            </div>
+                                            <button onClick={() => deleteAppointmentSlot(a.id).then(() => fetchGlobalData())} className="text-red-400 text-xs border border-red-500/30 px-2 py-1 rounded">Eliminar</button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl overflow-x-auto">
+                            <div className="min-w-[800px]">
+                                {/* SAFE LAYOUT: Flex Rows for Time Header */}
+                                <div className="flex border-b border-slate-800 bg-slate-950/50">
+                                    <div className="w-20 shrink-0 p-4 border-r border-slate-800 flex items-center justify-center text-xs font-bold text-slate-500">
+                                        HORA
+                                    </div>
+                                    <div className="flex-1 grid grid-cols-5 divide-x divide-slate-800">
+                                        {weekDays.map((day, i) => {
+                                            const isToday = new Date().toDateString() === day.toDateString();
+                                            return (
+                                                <div key={i} className={`p-4 text-center ${isToday ? 'bg-indigo-900/10' : ''}`}>
+                                                    <p className={`text-sm font-bold uppercase ${isToday ? 'text-indigo-400' : 'text-white'}`}>{day.toLocaleDateString('es-ES', { weekday: 'short' })}</p>
+                                                    <p className={`text-xs ${isToday ? 'text-indigo-300' : 'text-slate-500'}`}>{day.getDate()}</p>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
                                 </div>
-                                {weekDays.map((day, i) => (
-                                    <div key={i} className="p-4 border-r border-slate-800 last:border-0 text-center">
-                                        <p className="text-sm font-bold text-white uppercase">{day.toLocaleDateString('es-ES', { weekday: 'short' })}</p>
-                                        <p className="text-xs text-slate-500">{day.getDate()}</p>
+
+                                {/* Calendar Body using Flex Rows to guarantee alignment */}
+                                {[9, 10, 11, 12, 13, 14, 15, 16, 17].map(hour => (
+                                    <div key={hour} className="flex border-b border-slate-800 last:border-0 h-24 hover:bg-slate-800/20 transition-colors">
+                                        {/* Time Label */}
+                                        <div className="w-20 shrink-0 border-r border-slate-800 p-2 text-center text-xs text-slate-500 font-mono flex items-start justify-center pt-3">
+                                            {hour}:00
+                                        </div>
+                                        
+                                        {/* Days Cells Grid */}
+                                        <div className="flex-1 grid grid-cols-5 divide-x divide-slate-800">
+                                            {weekDays.map((day, i) => {
+                                                // Find appointment logic
+                                                const cellTime = new Date(day);
+                                                cellTime.setHours(hour, 0, 0, 0);
+                                                const cellTimestamp = cellTime.getTime();
+                                                const existingAppt = appointments.find(a => {
+                                                    const start = a.startTime;
+                                                    return Math.abs(start - cellTimestamp) < 60000; // Match within minute
+                                                });
+                                                
+                                                const isToday = new Date().toDateString() === day.toDateString();
+
+                                                return (
+                                                    <div 
+                                                        key={i} 
+                                                        className={`p-1 relative group cursor-pointer transition-colors ${isToday ? 'bg-indigo-900/5' : ''} ${!existingAppt ? 'hover:bg-slate-800/40' : ''}`}
+                                                        onClick={() => handleSlotClick(cellTime, existingAppt)}
+                                                    >
+                                                        {existingAppt ? (
+                                                            <div className={`
+                                                                w-full h-full rounded-lg p-2 text-xs flex flex-col justify-between shadow-lg border animate-scale-in
+                                                                ${existingAppt.status === 'blocked' 
+                                                                    ? 'bg-slate-800 border-slate-600 opacity-80' 
+                                                                    : 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500'
+                                                                }
+                                                            `}>
+                                                                <div className="font-bold text-white truncate">
+                                                                    {existingAppt.status === 'blocked' ? 'BLOQUEADO' : getPatientName(existingAppt.patientId || '')}
+                                                                </div>
+                                                                <div className="text-[10px] opacity-80 truncate">
+                                                                    {existingAppt.status === 'blocked' ? 'No disponible' : 'Ver detalles'}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                                <span className="text-xs font-bold text-slate-500 bg-slate-900 px-2 py-1 rounded border border-slate-700">+ Bloquear</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
-
-                            {/* Calendar Body */}
-                            {[9, 10, 11, 12, 13, 14, 15, 16, 17].map(hour => (
-                                <div key={hour} className="grid grid-cols-[60px_repeat(5,1fr)] border-b border-slate-800 last:border-0 hover:bg-slate-800/20 transition-colors">
-                                    <div className="border-r border-slate-800 p-2 text-center text-xs text-slate-500 font-mono flex items-start justify-center pt-3">
-                                        {hour}:00
-                                    </div>
-                                    {weekDays.map((day, i) => {
-                                        // Find appointment logic
-                                        const cellTime = new Date(day);
-                                        cellTime.setHours(hour, 0, 0, 0);
-                                        const cellTimestamp = cellTime.getTime();
-                                        const existingAppt = appointments.find(a => {
-                                            const start = a.startTime;
-                                            return Math.abs(start - cellTimestamp) < 60000; // Match within minute
-                                        });
-
-                                        return (
-                                            <div 
-                                                key={i} 
-                                                className={`
-                                                    border-r border-slate-800 last:border-0 h-24 p-1 relative group cursor-pointer transition-colors
-                                                    ${!existingAppt ? 'hover:bg-slate-800/40' : ''}
-                                                `}
-                                                onClick={() => handleSlotClick(cellTime, existingAppt)}
-                                            >
-                                                {existingAppt ? (
-                                                    <div className={`
-                                                        w-full h-full rounded-lg p-2 text-xs flex flex-col justify-between shadow-lg border
-                                                        ${existingAppt.status === 'blocked' 
-                                                            ? 'bg-slate-800 border-slate-700 bg-[url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0JyBoZWlnaHQ9JzQnPgo8cmVjdCB3aWR0aD0nNCcgaGVpZ2h0PSc0JyBmaWxsPScjMWUyOTNiJy8+CjxwYXRoIGQ9J00wIDRMNCAwJyBzdHJva2U9JyMzMzQxNTUnIHN0cm9rZS13aWR0aD0nMicvPgo8L3N2Zz4=")]' 
-                                                            : 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500'
-                                                        }
-                                                    `}>
-                                                        <div className="font-bold text-white truncate">
-                                                            {existingAppt.status === 'blocked' ? 'BLOQUEADO' : getPatientName(existingAppt.patientId || '')}
-                                                        </div>
-                                                        <div className="text-[10px] opacity-80 truncate">
-                                                            {existingAppt.status === 'blocked' ? 'No disponible' : 'Ver detalles'}
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                                        <span className="text-xs font-bold text-slate-500 bg-slate-900 px-2 py-1 rounded border border-slate-700">+ Bloquear</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))}
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
 
