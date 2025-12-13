@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Appointment, User } from '../types';
-import { getAppointments, bookAppointment, cancelAppointment } from '../services/dataService';
+import { getAppointments, createAppointment, deleteAppointmentSlot } from '../services/dataService';
 
 interface Props {
     user: User;
@@ -9,57 +9,105 @@ interface Props {
 }
 
 const AppointmentsPatientView: React.FC<Props> = ({ user, onClose }) => {
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [myAppointments, setMyAppointments] = useState<Appointment[]>([]);
+    const [availableSlots, setAvailableSlots] = useState<Date[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [view, setView] = useState<'my_appointments' | 'book_new'>('my_appointments');
 
     useEffect(() => {
-        loadAppointments();
+        loadData();
     }, [user]);
 
-    const loadAppointments = async () => {
+    const loadData = async () => {
         setIsLoading(true);
-        const data = await getAppointments(user.id, 'patient');
-        // Filter out past available slots to keep list clean
-        const now = Date.now();
-        const filtered = data.filter(a => !(a.status === 'available' && a.endTime < now));
-        setAppointments(filtered);
+        if (!user.assignedPsychologistId) {
+            setIsLoading(false);
+            return;
+        }
+
+        const allAppointments = await getAppointments(user.id, 'patient');
+        
+        // 1. Separate my appointments
+        const mine = allAppointments.filter(a => a.status === 'booked' && a.patientId === user.id);
+        setMyAppointments(mine);
+
+        // 2. Generate Available Slots
+        const slots: Date[] = [];
+        const today = new Date();
+        // Generate for next 14 days
+        for (let i = 1; i <= 14; i++) {
+            const date = new Date(today);
+            date.setDate(today.getDate() + i);
+            
+            // Skip Weekends (0 = Sunday, 6 = Saturday)
+            if (date.getDay() === 0 || date.getDay() === 6) continue;
+
+            // Generate 9:00 to 18:00 (Start times)
+            for (let hour = 9; hour < 18; hour++) {
+                const slotTime = new Date(date);
+                slotTime.setHours(hour, 0, 0, 0);
+                const slotTimestamp = slotTime.getTime();
+
+                // Check if this time overlaps with ANY existing appointment (booked or blocked)
+                const isOccupied = allAppointments.some(appt => {
+                    const start = appt.startTime;
+                    const end = appt.endTime;
+                    // Overlap check: SlotStart < ApptEnd && SlotEnd > ApptStart
+                    // Standard 1 hour slots
+                    const slotEnd = slotTimestamp + 3600000; 
+                    return (slotTimestamp < end && slotEnd > start);
+                });
+
+                if (!isOccupied) {
+                    slots.push(slotTime);
+                }
+            }
+        }
+        setAvailableSlots(slots);
         setIsLoading(false);
     };
 
-    const handleBook = async (id: string) => {
-        if (!confirm("¿Confirmar reserva de esta cita?")) return;
+    const handleBook = async (slotDate: Date) => {
+        if (!confirm(`¿Confirmar reserva para el ${slotDate.toLocaleString()}?`)) return;
+        
+        if (!user.assignedPsychologistId) return;
+
         try {
-            await bookAppointment(id, user.id);
+            await createAppointment({
+                psychologistId: user.assignedPsychologistId,
+                patientId: user.id,
+                startTime: slotDate.getTime(),
+                endTime: slotDate.getTime() + 3600000, // 1 hour
+                status: 'booked',
+                meetLink: 'https://meet.google.com/new' // Placeholder
+            });
             alert("Cita reservada con éxito.");
-            loadAppointments();
+            loadData();
             setView('my_appointments');
         } catch (e) {
-            alert("Error al reservar la cita.");
+            console.error(e);
+            alert("Error al reservar. Puede que el hueco ya no esté disponible.");
         }
     };
 
     const handleCancel = async (id: string) => {
         if (!confirm("¿Seguro que deseas cancelar esta cita?")) return;
         try {
-            await cancelAppointment(id);
+            await deleteAppointmentSlot(id); // Effectively cancelling simply removes the record in this model
             alert("Cita cancelada.");
-            loadAppointments();
+            loadData();
         } catch (e) {
             alert("Error al cancelar.");
         }
     };
 
-    const myAppointments = appointments.filter(a => a.status === 'booked' && a.patientId === user.id);
-    const availableSlots = appointments.filter(a => a.status === 'available');
-
-    // Group available slots by date
+    // Group available slots by date string for UI
     const slotsByDate = availableSlots.reduce((acc, slot) => {
-        const dateKey = new Date(slot.startTime).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+        const dateKey = slot.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
         if (!acc[dateKey]) acc[dateKey] = [];
         acc[dateKey].push(slot);
         return acc;
-    }, {} as Record<string, Appointment[]>);
+    }, {} as Record<string, Date[]>);
 
     return (
         <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col animate-slide-up">
@@ -132,7 +180,7 @@ const AppointmentsPatientView: React.FC<Props> = ({ user, onClose }) => {
                                     </div>
                                 ) : availableSlots.length === 0 ? (
                                     <div className="text-center py-12 bg-slate-900/50 rounded-2xl border border-slate-800 border-dashed">
-                                        <p className="text-slate-400">Tu psicólogo no tiene huecos disponibles actualmente.</p>
+                                        <p className="text-slate-400">No hay huecos disponibles en los próximos 14 días.</p>
                                     </div>
                                 ) : (
                                     Object.entries(slotsByDate).map(([dateStr, slots]) => (
@@ -143,11 +191,11 @@ const AppointmentsPatientView: React.FC<Props> = ({ user, onClose }) => {
                                             <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-3">
                                                 {slots.map(slot => (
                                                     <button 
-                                                        key={slot.id}
-                                                        onClick={() => handleBook(slot.id)}
+                                                        key={slot.getTime()}
+                                                        onClick={() => handleBook(slot)}
                                                         className="bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-200 py-3 px-2 rounded-xl text-sm font-bold transition-all border border-slate-700 hover:border-indigo-500 flex flex-col items-center gap-1 group"
                                                     >
-                                                        <span>{new Date(slot.startTime).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        <span>{slot.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
                                                         <span className="text-[10px] text-slate-500 group-hover:text-indigo-200">Disponible</span>
                                                     </button>
                                                 ))}
@@ -165,3 +213,4 @@ const AppointmentsPatientView: React.FC<Props> = ({ user, onClose }) => {
 };
 
 export default AppointmentsPatientView;
+
