@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, SurveyTemplate, QuestionType, SurveyQuestion, PatientReport, SurveyAssignment, EducationalResource } from '../types';
 import { getMyPatients, registerUser } from '../services/mockAuthService';
 import { saveSurveyTemplate, getTemplatesByPsychologist, assignSurveyToPatient, getReportsForPatient, getAssignmentsByPsychologist, getReportsByPsychologist, getAllSurveysForPatient, saveResource, getResourcesByPsychologist, assignResourceToPatient } from '../services/dataService';
-import { INITIAL_MENTAL_HEALTH_ASSESSMENT } from '../constants';
-import { calculateMentalHealthScore } from '../services/scoringService';
+import { INITIAL_MENTAL_HEALTH_ASSESSMENT, BDI_II_ASSESSMENT } from '../constants';
+import { calculateMentalHealthScore, calculateBDIScore } from '../services/scoringService';
 
 interface Props {
     user: User;
@@ -171,21 +172,39 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
         if (!selectedPatientId || !selectedTemplateId) return;
         let template = templates.find(t => t.id === selectedTemplateId);
         if (selectedTemplateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) template = INITIAL_MENTAL_HEALTH_ASSESSMENT;
+        if (selectedTemplateId === BDI_II_ASSESSMENT.id) template = BDI_II_ASSESSMENT;
+        
         if (template) { try { await assignSurveyToPatient(template, selectedPatientId, user.id); setAssignMsg('Encuesta enviada correctamente.'); const allAssignments = await getAllSurveysForPatient(selectedPatientId); setPatientPendingTasks(allAssignments.filter(a => a.status === 'pending')); setTimeout(() => setAssignMsg(''), 3000); } catch (e: any) { console.error(e); setAssignMsg('Error al enviar la encuesta: ' + e.message); } }
     };
 
     const getPatientName = (id: string) => { const p = patients.find(pat => pat.id === id); return p ? `${p.name} ${p.surnames || ''}` : 'Usuario desconocido'; };
-    const getQuestionText = (templateId: string, qId: string) => { if (templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) { const q = INITIAL_MENTAL_HEALTH_ASSESSMENT.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta'; } const temp = templates.find(t => t.id === templateId); if (!temp) return 'Pregunta no encontrada'; const q = temp.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta eliminada'; };
+    const getQuestionText = (templateId: string, qId: string) => { 
+        if (templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) { const q = INITIAL_MENTAL_HEALTH_ASSESSMENT.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta'; } 
+        if (templateId === BDI_II_ASSESSMENT.id) { const q = BDI_II_ASSESSMENT.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta'; } 
+        const temp = templates.find(t => t.id === templateId); if (!temp) return 'Pregunta no encontrada'; const q = temp.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta eliminada'; 
+    };
 
     const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || (p.surnames && p.surnames.toLowerCase().includes(patientSearchTerm.toLowerCase())) || p.email.toLowerCase().includes(patientSearchTerm.toLowerCase()));
 
     // Chart Data & Stats logic
-    const totalPatients = patients.length; const activeTemplates = templates.length + 1; const totalReports = allReports.length;
+    const totalPatients = patients.length; const activeTemplates = templates.length + 2; const totalReports = allReports.length;
     const completedSurveys = assignments.filter(a => a.status === 'completed');
-    const riskAlerts = completedSurveys.filter(a => { if (a.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id && a.responses) { const score = calculateMentalHealthScore(a.responses); return score.redFlags.length > 0 || score.depression.level === 'Grave' || score.anxiety.level === 'Grave'; } return false; }).length;
+    const riskAlerts = completedSurveys.filter(a => { 
+        if (!a.responses) return false;
+        if (a.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) { const score = calculateMentalHealthScore(a.responses); return score.redFlags.length > 0 || score.depression.level === 'Grave' || score.anxiety.level === 'Grave'; } 
+        if (a.templateId === BDI_II_ASSESSMENT.id) { const score = calculateBDIScore(a.responses); return score.hasSuicidalRisk || score.level === 'Depresión grave'; }
+        return false; 
+    }).length;
 
     const getUnifiedResults = () => {
-        const surveyItems = assignments.filter(a => a.status === 'completed').map(a => { let isRisk = false; if (a.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id && a.responses) { const score = calculateMentalHealthScore(a.responses); isRisk = score.redFlags.length > 0 || score.depression.level === 'Grave'; } return { type: 'survey' as const, id: a.id, date: a.completedAt || 0, title: a.templateTitle, patientId: a.patientId, details: a, isRisk }; });
+        const surveyItems = assignments.filter(a => a.status === 'completed').map(a => { 
+            let isRisk = false; 
+            if (a.responses) {
+                if (a.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) { const score = calculateMentalHealthScore(a.responses); isRisk = score.redFlags.length > 0 || score.depression.level === 'Grave'; } 
+                else if (a.templateId === BDI_II_ASSESSMENT.id) { const score = calculateBDIScore(a.responses); isRisk = score.hasSuicidalRisk || score.level === 'Depresión grave'; }
+            }
+            return { type: 'survey' as const, id: a.id, date: a.completedAt || 0, title: a.templateTitle, patientId: a.patientId, details: a, isRisk }; 
+        });
         const reportItems = allReports.map(r => ({ type: 'naretbox' as const, id: r.id, date: r.date, title: 'Informe Naretbox', patientId: r.patientId, details: r, isRisk: false }));
         let combined = [...surveyItems, ...reportItems];
         if (filterPatient !== 'all') combined = combined.filter(i => i.patientId === filterPatient);
@@ -202,6 +221,43 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
         if (assignment.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) {
              const score = calculateMentalHealthScore(assignment.responses!);
              return ( <div className="space-y-6"> {score.redFlags.length > 0 && (<div className="bg-red-500/20 border border-red-500 text-red-100 p-4 rounded-xl flex items-start gap-3"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg><div><p className="font-bold">ATENCIÓN REQUERIDA</p><ul className="list-disc list-inside text-sm mt-1">{score.redFlags.map((flag, i) => <li key={i}>{flag}</li>)}</ul></div></div>)} <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{[score.depression, score.anxiety, score.stress].map((metric, i) => (<div key={i} className="bg-slate-900 border border-slate-700 p-5 rounded-xl"><div className="flex justify-between items-center mb-2"><h4 className="font-bold text-slate-300 uppercase tracking-wider text-xs">{i === 0 ? 'Depresión' : i === 1 ? 'Ansiedad' : 'Estrés'}</h4><span className={`text-sm font-bold ${metric.color}`}>{metric.level}</span></div><div className="w-full bg-slate-800 h-2 rounded-full mb-3"><div className={`h-2 rounded-full ${metric.color.replace('text-', 'bg-')}`} style={{ width: `${(metric.rawScore / metric.maxScore) * 100}%` }}></div></div><p className="text-xs text-slate-400">{metric.advice}</p></div>))}</div> <div className="bg-slate-900 p-4 rounded-xl border border-slate-800"><h4 className="font-bold text-slate-300 text-sm mb-4">Respuestas Detalladas</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{assignment.responses?.map((resp, rIdx) => (<div key={rIdx} className="text-sm"><p className="text-slate-500 mb-1">{getQuestionText(INITIAL_MENTAL_HEALTH_ASSESSMENT.id, resp.questionId).substring(0, 60)}...</p><p className="text-white font-medium pl-2 border-l-2 border-slate-700">{resp.answer}</p></div>))}</div></div> </div> );
+        }
+        if (assignment.templateId === BDI_II_ASSESSMENT.id) {
+            const score = calculateBDIScore(assignment.responses!);
+            return (
+                <div className="space-y-6">
+                    {score.hasSuicidalRisk && (
+                        <div className="bg-red-500/20 border border-red-500 text-red-100 p-4 rounded-xl flex items-start gap-3 animate-pulse">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            <div>
+                                <p className="font-bold">RIESGO DE SUICIDIO DETECTADO</p>
+                                <p className="text-sm">El paciente indicó pensamientos relacionados con el daño autoinfligido en la pregunta #20.</p>
+                            </div>
+                        </div>
+                    )}
+                    <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl flex items-center justify-between">
+                        <div>
+                            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Puntuación Total BDI-II</p>
+                            <p className="text-4xl font-bold text-white mt-1">{score.score} <span className="text-lg text-slate-500 font-normal">/ 63</span></p>
+                        </div>
+                        <div className="text-right">
+                             <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Interpretación</p>
+                             <p className={`text-2xl font-bold ${score.color} mt-1`}>{score.level}</p>
+                        </div>
+                    </div>
+                     <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                        <h4 className="font-bold text-slate-300 text-sm mb-4">Respuestas Detalladas</h4>
+                        <div className="space-y-3">
+                            {assignment.responses?.map((resp, rIdx) => (
+                                <div key={rIdx} className="text-sm bg-slate-800/50 p-3 rounded-lg border border-slate-800">
+                                    <p className="text-slate-400 mb-1 text-xs uppercase font-bold">{getQuestionText(BDI_II_ASSESSMENT.id, resp.questionId).split('.')[1] || 'Pregunta'}</p>
+                                    <p className="text-white font-medium">{resp.answer}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
         }
         return ( <div className="space-y-6 max-w-3xl">{assignment.responses?.map((resp, idx) => (<div key={idx} className="bg-slate-900 border border-slate-800 p-5 rounded-xl"><p className="text-brand-500 text-xs font-bold uppercase tracking-widest mb-2">Pregunta {idx + 1}</p><p className="text-slate-300 text-sm mb-3 font-medium border-b border-slate-800 pb-2">{getQuestionText(assignment.templateId, resp.questionId)}</p><p className="text-white text-lg font-light pl-2 border-l-2 border-brand-500">{resp.answer}</p></div>))}</div> );
     };
@@ -282,16 +338,104 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                     {toolSubTab === 'surveys' && (
                          !isBuilderMode ? (
                             <>
-                                <div><h2 className="text-xl font-bold text-slate-200 mb-4 flex items-center gap-2"><span className="w-1 h-6 bg-brand-500 rounded-full"></span>Evaluaciones Estándar</h2><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"><div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-brand-500/30 rounded-2xl p-6 hover:border-brand-500 transition-all flex flex-col h-full shadow-lg shadow-brand-900/10"><div className="flex items-start justify-between mb-4"><div className="p-3 bg-brand-500 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div><span className="text-[10px] uppercase bg-brand-900/30 text-brand-300 px-2 py-1 rounded font-bold border border-brand-500/30">Recomendado</span></div><h3 className="font-bold text-lg text-white mb-2">{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</h3><p className="text-slate-400 text-sm mb-6 flex-1">{INITIAL_MENTAL_HEALTH_ASSESSMENT.description}</p><div className="mt-auto"><button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-slate-800 hover:bg-brand-600 hover:text-white text-slate-300 font-bold py-3 rounded-xl transition-all border border-slate-700 hover:border-brand-500">Asignar a Paciente</button></div></div></div></div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-200 mb-4 flex items-center gap-2"><span className="w-1 h-6 bg-brand-500 rounded-full"></span>Evaluaciones Estándar</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-brand-500/30 rounded-2xl p-6 hover:border-brand-500 transition-all flex flex-col h-full shadow-lg shadow-brand-900/10"><div className="flex items-start justify-between mb-4"><div className="p-3 bg-brand-500 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div><span className="text-[10px] uppercase bg-brand-900/30 text-brand-300 px-2 py-1 rounded font-bold border border-brand-500/30">Recomendado</span></div><h3 className="font-bold text-lg text-white mb-2">{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</h3><p className="text-slate-400 text-sm mb-6 flex-1">{INITIAL_MENTAL_HEALTH_ASSESSMENT.description}</p><div className="mt-auto"><button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-slate-800 hover:bg-brand-600 hover:text-white text-slate-300 font-bold py-3 rounded-xl transition-all border border-slate-700 hover:border-brand-500">Asignar a Paciente</button></div></div>
+                                        {/* BDI-II CARD */}
+                                        <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-slate-700 rounded-2xl p-6 hover:border-slate-500 transition-all flex flex-col h-full shadow-lg"><div className="flex items-start justify-between mb-4"><div className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></div><span className="text-[10px] uppercase bg-indigo-900/30 text-indigo-300 px-2 py-1 rounded font-bold border border-indigo-500/30">Depresión</span></div><h3 className="font-bold text-lg text-white mb-2">{BDI_II_ASSESSMENT.title}</h3><p className="text-slate-400 text-sm mb-6 flex-1">{BDI_II_ASSESSMENT.description}</p><div className="mt-auto"><button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 font-bold py-3 rounded-xl transition-all border border-slate-700 hover:border-indigo-500">Asignar a Paciente</button></div></div>
+                                    </div>
+                                </div>
                                 <div className="mt-8"><div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold text-slate-200 flex items-center gap-2"><span className="w-1 h-6 bg-indigo-500 rounded-full"></span>Mis Plantillas</h2><button onClick={() => setIsBuilderMode(true)} className="text-indigo-400 hover:text-white text-sm font-bold flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"><span>+</span> Crear Nueva</button></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{templates.length === 0 ? (<div className="col-span-full py-8 text-center bg-slate-900/30 rounded-3xl border border-slate-800 border-dashed"><p className="text-slate-500 text-sm">No has creado plantillas personalizadas.</p></div>) : (templates.map(t => (<div key={t.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-600 transition-all flex flex-col h-full"><h3 className="font-bold text-lg text-white mb-2">{t.title}</h3><p className="text-slate-400 text-sm mb-4 flex-1 line-clamp-2">{t.description}</p><div className="flex items-center gap-2 text-xs text-slate-500 font-bold uppercase tracking-wider bg-slate-950/50 p-2 rounded-lg w-fit"><span>{t.questions.length} Preguntas</span></div></div>)))}</div></div>
                             </>
                         ) : (
-                             // Builder UI code (omitted for brevity, assume present)
+                             // Builder UI
                              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-4xl mx-auto shadow-2xl animate-slide-up">
-                                <div className="flex justify-between items-center mb-8 pb-6 border-b border-slate-800"><h2 className="text-2xl font-bold text-slate-200">Nueva Plantilla</h2><button onClick={() => setIsBuilderMode(false)} className="text-slate-500 hover:text-white flex items-center gap-2 text-sm font-bold">Cancelar</button></div>
-                                <div className="mb-8"><label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Título</label><input type="text" className="w-full bg-slate-800 text-white p-4 rounded-xl border border-slate-700 outline-none" value={newTemplateTitle} onChange={(e) => setNewTemplateTitle(e.target.value)} /></div>
-                                {/* Builder Logic simplified */}
-                                <div className="flex justify-end pt-6 border-t border-slate-800"><button onClick={saveTemplate} className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl">Guardar Plantilla</button></div>
+                                <div className="flex justify-between items-center mb-8 pb-6 border-b border-slate-800">
+                                    <h2 className="text-2xl font-bold text-slate-200">Nueva Plantilla</h2>
+                                    <button onClick={() => setIsBuilderMode(false)} className="text-slate-500 hover:text-white flex items-center gap-2 text-sm font-bold">Cancelar</button>
+                                </div>
+
+                                <div className="mb-8">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Título de la Evaluación</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full bg-slate-800 text-white p-4 rounded-xl border border-slate-700 outline-none focus:border-brand-500 transition-colors" 
+                                        value={newTemplateTitle} 
+                                        onChange={(e) => setNewTemplateTitle(e.target.value)}
+                                        placeholder="Ej. Registro de Ansiedad Semanal"
+                                    />
+                                </div>
+
+                                <div className="space-y-6 mb-8">
+                                    {questions.map((q, idx) => (
+                                        <div key={q.id} className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800 relative group">
+                                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                 <button onClick={() => setQuestions(questions.filter(qi => qi.id !== q.id))} className="text-slate-600 hover:text-red-400">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                 </button>
+                                            </div>
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <span className="bg-slate-800 text-slate-400 text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">
+                                                    {q.type === 'scale' ? 'Escala 1-10' : q.type === 'multiple_choice' ? 'Opción Múltiple' : 'Texto Libre'}
+                                                </span>
+                                                <span className="text-slate-600 text-xs font-bold">Pregunta {idx + 1}</span>
+                                            </div>
+                                            <input 
+                                                className="w-full bg-transparent text-white text-lg font-medium outline-none border-b border-slate-700 focus:border-brand-500 pb-2 mb-4 placeholder-slate-600"
+                                                placeholder="Escribe la pregunta aquí..."
+                                                value={q.text}
+                                                onChange={(e) => updateQuestionText(q.id, e.target.value)}
+                                            />
+                                            
+                                            {q.type === 'multiple_choice' && q.options && (
+                                                <div className="space-y-3 pl-4 border-l-2 border-slate-800">
+                                                    {q.options.map((opt, optIdx) => (
+                                                        <div key={optIdx} className="flex items-center gap-2">
+                                                            <div className="w-3 h-3 rounded-full border border-slate-600"></div>
+                                                            <input 
+                                                                className="bg-transparent text-slate-300 text-sm outline-none w-full"
+                                                                value={opt}
+                                                                onChange={(e) => updateOptionText(q.id, optIdx, e.target.value)}
+                                                                placeholder={`Opción ${optIdx + 1}`}
+                                                            />
+                                                            <button onClick={() => removeOption(q.id, optIdx)} className="text-slate-600 hover:text-slate-400 px-2">×</button>
+                                                        </div>
+                                                    ))}
+                                                    <button onClick={() => addOption(q.id)} className="text-xs font-bold text-brand-500 hover:text-brand-400 mt-2">+ Añadir Opción</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    {questions.length === 0 && (
+                                        <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl text-slate-600">
+                                            Empieza añadiendo preguntas a tu plantilla.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-wrap gap-3 mb-8 justify-center border-t border-b border-slate-800 py-6">
+                                    <button onClick={() => addQuestion('scale')} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
+                                        <span>📊</span> Escala Numérica
+                                    </button>
+                                    <button onClick={() => addQuestion('multiple_choice')} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
+                                        <span>☑️</span> Opción Múltiple
+                                    </button>
+                                    <button onClick={() => addQuestion('text')} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
+                                        <span>✍️</span> Texto Libre
+                                    </button>
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button 
+                                        onClick={saveTemplate} 
+                                        disabled={!newTemplateTitle || questions.length === 0}
+                                        className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-all"
+                                    >
+                                        Guardar Plantilla
+                                    </button>
+                                </div>
                             </div>
                         )
                     )}
@@ -446,6 +590,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                                      <select className="w-full bg-slate-950 text-white p-2 rounded-lg border border-slate-700 mb-3" onChange={(e) => setSelectedTemplateId(e.target.value)} value={selectedTemplateId}>
                                             <option value="">Seleccionar Plantilla...</option>
                                             <option value={INITIAL_MENTAL_HEALTH_ASSESSMENT.id}>{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</option>
+                                            <option value={BDI_II_ASSESSMENT.id}>{BDI_II_ASSESSMENT.title}</option>
                                             {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                                      </select>
                                      <button onClick={handleAssign} className="w-full bg-brand-500 text-white py-2 rounded-lg text-sm font-bold">Enviar Tarea</button>
