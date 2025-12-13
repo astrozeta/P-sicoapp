@@ -224,7 +224,7 @@ export const INITIAL_MENTAL_HEALTH_ASSESSMENT: SurveyTemplate = {
 };
 
 export const BDI_II_ASSESSMENT: SurveyTemplate = {
-  id: 'bdi-ii-standard-v1',
+  id: '94b0d111-b0d1-4b0d-8b0d-111111111111', // UUID válido para Postgres
   psychologistId: 'system',
   title: 'Inventario de Depresión de Beck (BDI-II)',
   description: 'Cuestionario de autoinforme de 21 ítems para medir la severidad de la depresión.',
@@ -463,3 +463,4 @@ export const BDI_II_ASSESSMENT: SurveyTemplate = {
     }
   ]
 };
+
