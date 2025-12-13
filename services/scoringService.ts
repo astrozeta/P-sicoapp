@@ -96,8 +96,6 @@ export const calculateMentalHealthScore = (responses: SurveyResponse[]): Assessm
     };
 };
 
-// --- BDI-II Scoring ---
-
 export const calculateBDIScore = (responses: SurveyResponse[]): BDIResult => {
     let totalScore = 0;
     let hasSuicidalRisk = false;
@@ -134,4 +132,3 @@ export const calculateBDIScore = (responses: SurveyResponse[]): BDIResult => {
 
     return { score: totalScore, level, color, hasSuicidalRisk };
 };
-
