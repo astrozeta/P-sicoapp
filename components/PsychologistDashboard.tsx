@@ -1282,4 +1282,3 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 };
 
 export default PsychologistDashboard;
-
