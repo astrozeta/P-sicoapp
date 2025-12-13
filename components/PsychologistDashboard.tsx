@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { User, SurveyTemplate, QuestionType, SurveyQuestion, PatientReport, SurveyAssignment, EducationalResource } from '../types';
 import { getMyPatients, registerUser } from '../services/mockAuthService';
 import { saveSurveyTemplate, getTemplatesByPsychologist, assignSurveyToPatient, getReportsForPatient, getAssignmentsByPsychologist, getReportsByPsychologist, getAllSurveysForPatient, saveResource, getResourcesByPsychologist, assignResourceToPatient } from '../services/dataService';
@@ -188,9 +189,19 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     };
 
     const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || (p.surnames && p.surnames.toLowerCase().includes(patientSearchTerm.toLowerCase())) || p.email.toLowerCase().includes(patientSearchTerm.toLowerCase()));
+    
+    // Filter duplicates: Remove templates that match ID or Title of system templates
+    // This is robust against ID changes (e.g. string to uuid migration) by checking titles too
+    const displayTemplates = templates.filter(t => 
+        t.id !== INITIAL_MENTAL_HEALTH_ASSESSMENT.id && 
+        t.id !== BDI_II_ASSESSMENT.id &&
+        t.title !== INITIAL_MENTAL_HEALTH_ASSESSMENT.title &&
+        t.title !== BDI_II_ASSESSMENT.title
+    );
 
     // Chart Data & Stats logic
-    const totalPatients = patients.length; const activeTemplates = templates.length + 2; const totalReports = allReports.length;
+    const totalPatients = patients.length; 
+    const totalReports = allReports.length;
     const completedSurveys = assignments.filter(a => a.status === 'completed');
     const riskAlerts = completedSurveys.filter(a => { 
         if (!a.responses) return false;
@@ -372,10 +383,10 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                                 </div>
                                 <div className="mt-8"><div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold text-slate-200 flex items-center gap-2"><span className="w-1 h-6 bg-indigo-500 rounded-full"></span>Mis Plantillas</h2><button onClick={() => setIsBuilderMode(true)} className="text-indigo-400 hover:text-white text-sm font-bold flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"><span>+</span> Crear Nueva</button></div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {templates.length === 0 ? (
+                                        {displayTemplates.length === 0 ? (
                                             <div className="col-span-full py-8 text-center bg-slate-900/30 rounded-3xl border border-slate-800 border-dashed"><p className="text-slate-500 text-sm">No has creado plantillas personalizadas.</p></div>
                                         ) : (
-                                            templates.map(t => (
+                                            displayTemplates.map(t => (
                                                 <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-600 transition-all flex flex-col h-full">
                                                     <h3 className="font-bold text-lg text-white mb-2">{t.title}</h3>
                                                     <p className="text-slate-400 text-sm mb-4 flex-1 line-clamp-2">{t.description}</p>
@@ -480,54 +491,19 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             </div>
                         )
                     )}
-
-                    {toolSubTab === 'resources' && (
-                        !isResourceMode ? (
-                            <div className="space-y-6">
-                                <div className="flex justify-between items-center">
-                                    <p className="text-slate-400 max-w-lg text-sm">Sube infografías, PDFs o enlaces a vídeos para que tus pacientes puedan consultarlos desde su biblioteca.</p>
-                                    <button onClick={() => setIsResourceMode(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-indigo-700 transition-colors">+ Añadir Recurso</button>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {resources.length === 0 ? (
-                                        <div className="col-span-full py-12 text-center bg-slate-900/30 rounded-3xl border border-slate-800 border-dashed text-slate-500 italic">No hay recursos educativos.</div>
-                                    ) : (
-                                        resources.map(r => (
-                                            <div key={r.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl hover:border-indigo-500/50 transition-colors group">
-                                                <div className="flex items-start justify-between mb-4">
-                                                    <div className="w-10 h-10 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
-                                                        {r.type === 'pdf' ? '📄' : r.type === 'image' ? '🖼️' : r.type === 'video' ? '▶️' : '🔗'}
-                                                    </div>
-                                                    <a href={r.url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg></a>
-                                                </div>
-                                                <h3 className="font-bold text-white mb-1 truncate">{r.title}</h3>
-                                                <p className="text-xs text-slate-500 mb-4 line-clamp-2">{r.description || 'Sin descripción'}</p>
-                                                <button onClick={() => { alert("Asigna este recurso desde la pestaña Pacientes"); onSectionChange('patients'); }} className="w-full py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg hover:bg-indigo-600 hover:text-white transition-colors">Asignar</button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        ) : (
-                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-2xl mx-auto shadow-2xl animate-slide-up">
-                                <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-white">Nuevo Recurso Educativo</h2><button onClick={() => setIsResourceMode(false)} className="text-slate-500 hover:text-white">Cancelar</button></div>
-                                <div className="space-y-4">
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Título</label><input value={resTitle} onChange={e => setResTitle(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500" placeholder="Ej. Guía de Respiración" /></div>
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Tipo</label><select value={resType} onChange={e => setResType(e.target.value as any)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none"><option value="image">Imagen</option><option value="pdf">Documento PDF</option><option value="video">Vídeo</option><option value="link">Enlace Web</option></select></div>
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Descripción</label><textarea value={resDesc} onChange={e => setResDesc(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none h-24 resize-none" placeholder="Breve descripción para el paciente..." /></div>
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">URL del Recurso</label><input value={resUrl} onChange={e => setResUrl(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500" placeholder="https://..." /></div>
-                                    <button onClick={handleSaveResource} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 mt-4">Guardar en Biblioteca</button>
-                                </div>
-                            </div>
-                        )
-                    )}
                 </div>
             )}
 
-            {/* PATIENT DETAILS MODAL WITH RESOURCE ASSIGNMENT */}
-            {isViewingPatientDetails && selectedPatientId && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-slate-900 w-full max-w-5xl h-[90vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scale-in">
+            {/* PATIENT DETAILS MODAL WITH RESOURCE ASSIGNMENT - PORTALED */}
+            {isViewingPatientDetails && selectedPatientId && createPortal(
+                <div 
+                    className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+                    onClick={() => setIsViewingPatientDetails(false)}
+                >
+                    <div 
+                        className="bg-slate-900 w-full max-w-5xl h-[90vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scale-in"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         {/* Header */}
                         <div className="bg-slate-900 p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
                              <h2 className="text-2xl font-bold text-white">{getPatientName(selectedPatientId)}</h2>
@@ -544,7 +520,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                                             <option value="">Seleccionar Plantilla...</option>
                                             <option value={INITIAL_MENTAL_HEALTH_ASSESSMENT.id}>{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</option>
                                             <option value={BDI_II_ASSESSMENT.id}>{BDI_II_ASSESSMENT.title}</option>
-                                            {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                                            {displayTemplates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                                      </select>
                                      <button onClick={handleAssign} className="w-full bg-brand-500 text-white py-2 rounded-lg text-sm font-bold">Enviar Tarea</button>
                                 </div>
@@ -598,13 +574,20 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                              </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            {/* Modal for Survey Results */}
-            {viewingAssignment && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-                    <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col">
+            {/* Modal for Survey Results - PORTALED */}
+            {viewingAssignment && createPortal(
+                <div 
+                    className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
+                    onClick={() => setViewingAssignment(null)}
+                >
+                    <div 
+                        className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="p-6 border-b border-slate-700 flex justify-between items-center">
                             <div>
                                 <h3 className="text-xl font-bold text-white">{viewingAssignment.templateTitle}</h3>
@@ -616,13 +599,20 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             <SurveyResultView assignment={viewingAssignment} />
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
             
-            {/* Modal for Template PREVIEW */}
-            {viewingTemplate && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-                    <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col">
+            {/* Modal for Template PREVIEW - PORTALED */}
+            {viewingTemplate && createPortal(
+                <div 
+                    className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
+                    onClick={() => setViewingTemplate(null)}
+                >
+                    <div 
+                        className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="p-6 border-b border-slate-700 flex justify-between items-center">
                             <div>
                                 <h3 className="text-xl font-bold text-white">{viewingTemplate.title}</h3>
@@ -657,13 +647,20 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             <button onClick={() => setViewingTemplate(null)} className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700">Cerrar Vista Previa</button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            {/* Modal for Patient Report */}
-            {selectedReport && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-                    <div className="bg-slate-900 w-full max-w-2xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col">
+            {/* Modal for Patient Report - PORTALED */}
+            {selectedReport && createPortal(
+                <div 
+                    className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
+                    onClick={() => setSelectedReport(null)}
+                >
+                    <div 
+                        className="bg-slate-900 w-full max-w-2xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="p-6 border-b border-slate-700 flex justify-between items-center">
                             <div>
                                 <h3 className="text-xl font-bold text-white">Informe Diario</h3>
@@ -690,7 +687,8 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
