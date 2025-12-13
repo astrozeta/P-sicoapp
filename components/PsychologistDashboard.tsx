@@ -9,7 +9,7 @@ import {
     // New Services
     updatePatientBasicInfo, getClinicalProfile, saveClinicalProfile, getClinicalSessions, saveClinicalSession, getTreatmentGoals, saveTreatmentGoal, updateTreatmentGoalStatus, getFinancials, saveFinancialRecord, getReminders, saveReminder,
     // Appointments
-    getAppointments, createAppointmentSlot, deleteAppointmentSlot
+    getAppointments, createAppointment, deleteAppointmentSlot
 } from '../services/dataService';
 import { INITIAL_MENTAL_HEALTH_ASSESSMENT, BDI_II_ASSESSMENT } from '../constants';
 import { calculateMentalHealthScore, calculateBDIScore } from '../services/scoringService';
@@ -135,10 +135,10 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     const [resType, setResType] = useState<'image' | 'pdf' | 'video' | 'link'>('image');
     const [resUrl, setResUrl] = useState('');
 
-    // Appointment State
-    const [newSlotDate, setNewSlotDate] = useState('');
-    const [newSlotTime, setNewSlotTime] = useState('');
-    const [newSlotDuration, setNewSlotDuration] = useState(60); // minutes
+    // Appointment State (Block logic)
+    const [blockDate, setBlockDate] = useState('');
+    const [blockTime, setBlockTime] = useState('');
+    const [blockDuration, setBlockDuration] = useState(60); // minutes
 
     // --- PATIENT MODAL / CLINICAL RECORD STATE ---
     const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -286,25 +286,26 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
         setIsResourceMode(false); setResTitle(''); setResDesc(''); setResUrl('');
     };
 
-    const handleCreateSlot = async () => {
-        if (!newSlotDate || !newSlotTime) return;
-        const start = new Date(`${newSlotDate}T${newSlotTime}`).getTime();
-        const end = start + newSlotDuration * 60000;
+    // New Block Logic
+    const handleBlockTime = async () => {
+        if (!blockDate || !blockTime) return;
+        const start = new Date(`${blockDate}T${blockTime}`).getTime();
+        const end = start + blockDuration * 60000;
         
         try {
-            await createAppointmentSlot({
+            await createAppointment({
                 psychologistId: user.id,
                 startTime: start,
                 endTime: end,
-                meetLink: '' 
+                status: 'blocked' 
             });
             await fetchGlobalData();
-            setNewSlotDate(''); setNewSlotTime('');
-        } catch(e) { alert("Error al crear hueco."); }
+            setBlockDate(''); setBlockTime('');
+        } catch(e) { alert("Error al bloquear horario."); }
     };
 
     const handleDeleteSlot = async (id: string) => {
-        if(!confirm("¿Eliminar este hueco de la agenda?")) return;
+        if(!confirm("¿Eliminar este registro de la agenda?")) return;
         try {
             await deleteAppointmentSlot(id);
             await fetchGlobalData();
@@ -641,39 +642,42 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             {activeSection === 'schedule' && (
                 <div className="space-y-8 animate-fade-in">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-xl font-bold text-slate-200">Agenda y Citas</h2>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-200">Agenda</h2>
+                            <p className="text-xs text-slate-500">Horario de atención: Lunes a Viernes, 09:00 - 18:00</p>
+                        </div>
                         
                         <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex gap-3 items-center">
-                            <input type="date" className="bg-slate-800 text-white text-sm p-2 rounded border border-slate-700" value={newSlotDate} onChange={e => setNewSlotDate(e.target.value)} />
-                            <input type="time" className="bg-slate-800 text-white text-sm p-2 rounded border border-slate-700" value={newSlotTime} onChange={e => setNewSlotTime(e.target.value)} />
-                            <button onClick={handleCreateSlot} className="bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded text-sm font-bold">
-                                + Abrir Hueco
+                            <input type="date" className="bg-slate-800 text-white text-sm p-2 rounded border border-slate-700" value={blockDate} onChange={e => setBlockDate(e.target.value)} />
+                            <input type="time" className="bg-slate-800 text-white text-sm p-2 rounded border border-slate-700" value={blockTime} onChange={e => setBlockTime(e.target.value)} />
+                            <button onClick={handleBlockTime} className="bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-2 rounded text-sm font-bold border border-red-500/30 transition-colors">
+                                Bloquear Horario
                             </button>
                         </div>
                     </div>
 
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 overflow-hidden">
-                        <h3 className="text-lg font-bold text-white mb-6">Próximas Sesiones</h3>
+                        <h3 className="text-lg font-bold text-white mb-6">Próximos Eventos (Citas y Bloqueos)</h3>
                         
                         {appointments.length === 0 ? (
-                            <p className="text-slate-500 italic">No hay citas programadas ni huecos abiertos.</p>
+                            <p className="text-slate-500 italic">No hay citas ni bloqueos registrados.</p>
                         ) : (
                             <div className="space-y-2">
                                 {appointments.map(app => (
-                                    <div key={app.id} className="flex items-center justify-between p-4 bg-slate-950/50 rounded-xl border border-slate-800">
+                                    <div key={app.id} className={`flex items-center justify-between p-4 rounded-xl border ${app.status === 'blocked' ? 'bg-slate-800/50 border-slate-700' : 'bg-indigo-900/20 border-indigo-500/30'}`}>
                                         <div className="flex items-center gap-4">
-                                            <div className={`w-3 h-3 rounded-full ${app.status === 'booked' ? 'bg-indigo-500' : 'bg-emerald-500'}`}></div>
+                                            <div className={`w-3 h-3 rounded-full ${app.status === 'booked' ? 'bg-indigo-500' : 'bg-slate-500'}`}></div>
                                             <div>
                                                 <p className="font-bold text-white text-sm">
                                                     {new Date(app.startTime).toLocaleDateString()} - {new Date(app.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                 </p>
                                                 <p className="text-xs text-slate-500">
-                                                    {app.status === 'booked' ? `Paciente: ${getPatientName(app.patientId || '')}` : 'Disponible para reserva'}
+                                                    {app.status === 'booked' ? `Paciente: ${getPatientName(app.patientId || '')}` : 'BLOQUEADO (No disponible)'}
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
-                                            {app.meetLink && <a href={app.meetLink} target="_blank" className="text-xs text-indigo-400 border border-indigo-500/30 px-3 py-1 rounded hover:bg-indigo-500/10">Link</a>}
+                                            {app.meetLink && app.status === 'booked' && <a href={app.meetLink} target="_blank" className="text-xs text-indigo-400 border border-indigo-500/30 px-3 py-1 rounded hover:bg-indigo-500/10">Link</a>}
                                             <button onClick={() => handleDeleteSlot(app.id)} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/10">Eliminar</button>
                                         </div>
                                     </div>
@@ -1278,3 +1282,4 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 };
 
 export default PsychologistDashboard;
+
