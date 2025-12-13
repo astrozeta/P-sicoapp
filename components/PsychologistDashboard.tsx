@@ -75,6 +75,9 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     // Detailed Views (Modals)
     const [selectedReport, setSelectedReport] = useState<PatientReport | null>(null);
     const [viewingAssignment, setViewingAssignment] = useState<SurveyAssignment | null>(null);
+    
+    // Template Preview
+    const [viewingTemplate, setViewingTemplate] = useState<SurveyTemplate | null>(null);
 
     // Review Tab State & Filters
     const [filterPatient, setFilterPatient] = useState('all');
@@ -341,12 +344,50 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                                 <div>
                                     <h2 className="text-xl font-bold text-slate-200 mb-4 flex items-center gap-2"><span className="w-1 h-6 bg-brand-500 rounded-full"></span>Evaluaciones Estándar</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-brand-500/30 rounded-2xl p-6 hover:border-brand-500 transition-all flex flex-col h-full shadow-lg shadow-brand-900/10"><div className="flex items-start justify-between mb-4"><div className="p-3 bg-brand-500 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div><span className="text-[10px] uppercase bg-brand-900/30 text-brand-300 px-2 py-1 rounded font-bold border border-brand-500/30">Recomendado</span></div><h3 className="font-bold text-lg text-white mb-2">{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</h3><p className="text-slate-400 text-sm mb-6 flex-1">{INITIAL_MENTAL_HEALTH_ASSESSMENT.description}</p><div className="mt-auto"><button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-slate-800 hover:bg-brand-600 hover:text-white text-slate-300 font-bold py-3 rounded-xl transition-all border border-slate-700 hover:border-brand-500">Asignar a Paciente</button></div></div>
+                                        <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-brand-500/30 rounded-2xl p-6 hover:border-brand-500 transition-all flex flex-col h-full shadow-lg shadow-brand-900/10">
+                                            <div className="flex items-start justify-between mb-4"><div className="p-3 bg-brand-500 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div><span className="text-[10px] uppercase bg-brand-900/30 text-brand-300 px-2 py-1 rounded font-bold border border-brand-500/30">Recomendado</span></div>
+                                            <h3 className="font-bold text-lg text-white mb-2">{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</h3>
+                                            <p className="text-slate-400 text-sm mb-6 flex-1">{INITIAL_MENTAL_HEALTH_ASSESSMENT.description}</p>
+                                            <div className="mt-auto space-y-2">
+                                                <button onClick={() => setViewingTemplate(INITIAL_MENTAL_HEALTH_ASSESSMENT)} className="w-full bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded-lg hover:text-white transition-colors">Ver Preguntas (Preview)</button>
+                                                <button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg">Asignar a Paciente</button>
+                                            </div>
+                                        </div>
+                                        
                                         {/* BDI-II CARD */}
-                                        <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-slate-700 rounded-2xl p-6 hover:border-slate-500 transition-all flex flex-col h-full shadow-lg"><div className="flex items-start justify-between mb-4"><div className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></div><span className="text-[10px] uppercase bg-indigo-900/30 text-indigo-300 px-2 py-1 rounded font-bold border border-indigo-500/30">Depresión</span></div><h3 className="font-bold text-lg text-white mb-2">{BDI_II_ASSESSMENT.title}</h3><p className="text-slate-400 text-sm mb-6 flex-1">{BDI_II_ASSESSMENT.description}</p><div className="mt-auto"><button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 font-bold py-3 rounded-xl transition-all border border-slate-700 hover:border-indigo-500">Asignar a Paciente</button></div></div>
+                                        <div className="bg-gradient-to-br from-indigo-900/20 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 hover:border-indigo-500 transition-all flex flex-col h-full shadow-lg relative overflow-hidden group">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
+                                            <div className="flex items-start justify-between mb-4 relative z-10">
+                                                <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></div>
+                                                <span className="text-[10px] uppercase bg-indigo-900/30 text-indigo-300 px-2 py-1 rounded font-bold border border-indigo-500/30">Depresión</span>
+                                            </div>
+                                            <h3 className="font-bold text-lg text-white mb-2 relative z-10">{BDI_II_ASSESSMENT.title}</h3>
+                                            <p className="text-slate-400 text-sm mb-6 flex-1 relative z-10">{BDI_II_ASSESSMENT.description}</p>
+                                            <div className="mt-auto space-y-2 relative z-10">
+                                                <button onClick={() => setViewingTemplate(BDI_II_ASSESSMENT)} className="w-full bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded-lg hover:text-white transition-colors">Ver Preguntas (Preview)</button>
+                                                <button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg">Asignar a Paciente</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="mt-8"><div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold text-slate-200 flex items-center gap-2"><span className="w-1 h-6 bg-indigo-500 rounded-full"></span>Mis Plantillas</h2><button onClick={() => setIsBuilderMode(true)} className="text-indigo-400 hover:text-white text-sm font-bold flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"><span>+</span> Crear Nueva</button></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{templates.length === 0 ? (<div className="col-span-full py-8 text-center bg-slate-900/30 rounded-3xl border border-slate-800 border-dashed"><p className="text-slate-500 text-sm">No has creado plantillas personalizadas.</p></div>) : (templates.map(t => (<div key={t.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-600 transition-all flex flex-col h-full"><h3 className="font-bold text-lg text-white mb-2">{t.title}</h3><p className="text-slate-400 text-sm mb-4 flex-1 line-clamp-2">{t.description}</p><div className="flex items-center gap-2 text-xs text-slate-500 font-bold uppercase tracking-wider bg-slate-950/50 p-2 rounded-lg w-fit"><span>{t.questions.length} Preguntas</span></div></div>)))}</div></div>
+                                <div className="mt-8"><div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold text-slate-200 flex items-center gap-2"><span className="w-1 h-6 bg-indigo-500 rounded-full"></span>Mis Plantillas</h2><button onClick={() => setIsBuilderMode(true)} className="text-indigo-400 hover:text-white text-sm font-bold flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"><span>+</span> Crear Nueva</button></div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {templates.length === 0 ? (
+                                            <div className="col-span-full py-8 text-center bg-slate-900/30 rounded-3xl border border-slate-800 border-dashed"><p className="text-slate-500 text-sm">No has creado plantillas personalizadas.</p></div>
+                                        ) : (
+                                            templates.map(t => (
+                                                <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-600 transition-all flex flex-col h-full">
+                                                    <h3 className="font-bold text-lg text-white mb-2">{t.title}</h3>
+                                                    <p className="text-slate-400 text-sm mb-4 flex-1 line-clamp-2">{t.description}</p>
+                                                    <div className="mt-auto space-y-2">
+                                                        <div className="flex items-center gap-2 text-xs text-slate-500 font-bold uppercase tracking-wider bg-slate-950/50 p-2 rounded-lg w-fit mb-2"><span>{t.questions.length} Preguntas</span></div>
+                                                        <button onClick={() => setViewingTemplate(t)} className="w-full bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded-lg hover:text-white transition-colors">Ver Preguntas</button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
                             </>
                         ) : (
                              // Builder UI
@@ -665,6 +706,47 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                     </div>
                 </div>
             )}
+            
+            {/* Modal for Template PREVIEW */}
+            {viewingTemplate && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+                    <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col">
+                        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xl font-bold text-white">{viewingTemplate.title}</h3>
+                                <p className="text-sm text-slate-400">Vista Previa de Preguntas</p>
+                            </div>
+                            <button onClick={() => setViewingTemplate(null)} className="text-slate-400 hover:text-white">✕</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                            {viewingTemplate.questions.map((q, idx) => (
+                                <div key={q.id} className="bg-slate-800/30 p-4 rounded-xl border border-slate-800">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <span className="bg-slate-700 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                                            {q.type === 'scale' ? 'Escala' : q.type === 'multiple_choice' ? 'Opción Múltiple' : 'Texto'}
+                                        </span>
+                                        <span className="text-slate-500 text-xs">Pregunta {idx + 1}</span>
+                                    </div>
+                                    <p className="text-white font-medium mb-3">{q.text}</p>
+                                    {q.options && (
+                                        <div className="space-y-2 pl-4 border-l border-slate-700">
+                                            {q.options.map((opt, i) => (
+                                                <div key={i} className="text-sm text-slate-400 flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-slate-600"></div>
+                                                    {opt}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end">
+                            <button onClick={() => setViewingTemplate(null)} className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700">Cerrar Vista Previa</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal for Patient Report */}
             {selectedReport && (
@@ -703,3 +785,4 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 };
 
 export default PsychologistDashboard;
+
