@@ -1,10 +1,13 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
-import { User, SurveyTemplate, QuestionType, SurveyQuestion, PatientReport, SurveyAssignment, EducationalResource } from '../types';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { User, SurveyTemplate, QuestionType, SurveyQuestion, PatientReport, SurveyAssignment, EducationalResource, ClinicalProfile, ClinicalSession, TreatmentGoal, FinancialRecord, Reminder } from '../types';
 import { getMyPatients, registerUser } from '../services/mockAuthService';
-import { saveSurveyTemplate, getTemplatesByPsychologist, assignSurveyToPatient, getReportsForPatient, getAssignmentsByPsychologist, getReportsByPsychologist, getAllSurveysForPatient, saveResource, getResourcesByPsychologist, assignResourceToPatient } from '../services/dataService';
+import { 
+    saveSurveyTemplate, getTemplatesByPsychologist, assignSurveyToPatient, getReportsForPatient, getAssignmentsByPsychologist, getReportsByPsychologist, getAllSurveysForPatient, saveResource, getResourcesByPsychologist, assignResourceToPatient,
+    // New Services
+    updatePatientBasicInfo, getClinicalProfile, saveClinicalProfile, getClinicalSessions, saveClinicalSession, getTreatmentGoals, saveTreatmentGoal, updateTreatmentGoalStatus, getFinancials, saveFinancialRecord, getReminders, saveReminder
+} from '../services/dataService';
 import { INITIAL_MENTAL_HEALTH_ASSESSMENT, BDI_II_ASSESSMENT } from '../constants';
 import { calculateMentalHealthScore, calculateBDIScore } from '../services/scoringService';
 
@@ -30,8 +33,71 @@ const StatCard: React.FC<{ title: string; value: string | number; subtitle?: str
     </div>
 );
 
+const SurveyResultView: React.FC<{ assignment: SurveyAssignment, templates: SurveyTemplate[] }> = ({ assignment, templates }) => {
+    const staticTemplates = [INITIAL_MENTAL_HEALTH_ASSESSMENT, BDI_II_ASSESSMENT];
+    const template = templates.find(t => t.id === assignment.templateId) || staticTemplates.find(t => t.id === assignment.templateId);
+
+    if (!template) return <div className="text-slate-400 p-4">Plantilla no encontrada para esta asignación.</div>;
+
+    // Calculate score if applicable
+    let scoreDisplay = null;
+    if (assignment.responses) {
+        if (template.id === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) {
+            const res = calculateMentalHealthScore(assignment.responses);
+            scoreDisplay = (
+                <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                    <h4 className="text-white font-bold mb-2">Resultados de Evaluación</h4>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="p-2 bg-slate-900 rounded-lg"><p className="text-xs text-slate-500 uppercase">Depresión</p><p className={`font-bold ${res.depression.color}`}>{res.depression.level}</p></div>
+                        <div className="p-2 bg-slate-900 rounded-lg"><p className="text-xs text-slate-500 uppercase">Ansiedad</p><p className={`font-bold ${res.anxiety.color}`}>{res.anxiety.level}</p></div>
+                        <div className="p-2 bg-slate-900 rounded-lg"><p className="text-xs text-slate-500 uppercase">Estrés</p><p className={`font-bold ${res.stress.color}`}>{res.stress.level}</p></div>
+                    </div>
+                    {res.redFlags.length > 0 && <div className="mt-3 p-2 bg-red-500/20 text-red-400 text-xs rounded border border-red-500/30">⚠️ {res.redFlags.join(', ')}</div>}
+                </div>
+            );
+        } else if (template.id === BDI_II_ASSESSMENT.id) {
+            const res = calculateBDIScore(assignment.responses);
+            scoreDisplay = (
+                <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700 flex justify-between items-center">
+                    <div>
+                        <h4 className="text-white font-bold">Puntaje BDI-II</h4>
+                        <p className={`text-xl font-bold ${res.color}`}>{res.level}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-4xl font-bold text-white">{res.score}</p>
+                        <p className="text-xs text-slate-500 uppercase">Total</p>
+                    </div>
+                    {res.hasSuicidalRisk && <div className="mt-3 p-2 bg-red-500/20 text-red-400 text-xs rounded border border-red-500/30 w-full col-span-2 text-center font-bold">⚠️ RIESGO DE SUICIDIO DETECTADO</div>}
+                </div>
+            );
+        }
+    }
+
+    return (
+        <div className="space-y-6">
+            {scoreDisplay}
+            {template.questions.map((q, idx) => {
+                const response = assignment.responses?.find(r => r.questionId === q.id);
+                return (
+                    <div key={q.id} className="bg-slate-800/30 p-4 rounded-xl border border-slate-800">
+                        <div className="flex items-center gap-2 mb-2">
+                             <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Pregunta {idx + 1}</span>
+                             {q.section && <span className="text-[10px] bg-slate-700 px-2 py-0.5 rounded text-slate-300">{q.section}</span>}
+                        </div>
+                        <p className="text-white font-medium mb-3">{q.text}</p>
+                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                            <span className="text-brand-400 font-bold text-sm">Respuesta: </span>
+                            <span className="text-slate-200 text-sm">{response ? String(response.answer) : 'Sin respuesta'}</span>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
 const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSectionChange }) => {
-    // Sync activeSection with internal render logic
+    // --- MAIN STATE ---
     const [patients, setPatients] = useState<User[]>([]);
     const [templates, setTemplates] = useState<SurveyTemplate[]>([]);
     const [assignments, setAssignments] = useState<SurveyAssignment[]>([]);
@@ -58,37 +124,72 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     const [newTemplateTitle, setNewTemplateTitle] = useState('');
     const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
     
-    // Resource (Infographics) State
+    // Resource State
     const [isResourceMode, setIsResourceMode] = useState(false);
     const [resTitle, setResTitle] = useState('');
     const [resDesc, setResDesc] = useState('');
     const [resType, setResType] = useState<'image' | 'pdf' | 'video' | 'link'>('image');
     const [resUrl, setResUrl] = useState('');
 
-    // Assignment State & Viewing Reports
+    // --- PATIENT MODAL / CLINICAL RECORD STATE ---
     const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+    const [isViewingPatientDetails, setIsViewingPatientDetails] = useState(false);
+    const [activeRecordTab, setActiveRecordTab] = useState<'general' | 'clinical' | 'treatment' | 'evaluations' | 'admin'>('general');
+    
+    // Loaded Data for Selected Patient
+    const [currentPatient, setCurrentPatient] = useState<User | null>(null);
+    const [clinicalProfile, setClinicalProfile] = useState<ClinicalProfile | null>(null);
+    const [sessions, setSessions] = useState<ClinicalSession[]>([]);
+    const [goals, setGoals] = useState<TreatmentGoal[]>([]);
+    const [financials, setFinancials] = useState<FinancialRecord[]>([]);
+    const [reminders, setReminders] = useState<Reminder[]>([]);
+    const [selectedPatientReports, setSelectedPatientReports] = useState<PatientReport[]>([]);
+    const [patientSurveys, setPatientSurveys] = useState<SurveyAssignment[]>([]);
+
+    // Forms State (Inside Modal)
+    const [isEditingBasic, setIsEditingBasic] = useState(false);
+    const [basicForm, setBasicForm] = useState<Partial<User>>({});
+    
+    const [isEditingClinical, setIsEditingClinical] = useState(false);
+    const [clinicalForm, setClinicalForm] = useState<Partial<ClinicalProfile>>({});
+    
+    const [isAddingSession, setIsAddingSession] = useState(false);
+    const [sessionForm, setSessionForm] = useState<Partial<ClinicalSession>>({});
+
+    const [isAddingGoal, setIsAddingGoal] = useState(false);
+    const [goalForm, setGoalForm] = useState({ desc: '', type: 'short_term' });
+
+    const [isAddingFinance, setIsAddingFinance] = useState(false);
+    const [financeForm, setFinanceForm] = useState<Partial<FinancialRecord>>({});
+
+    const [isAddingReminder, setIsAddingReminder] = useState(false);
+    const [reminderForm, setReminderForm] = useState({ title: '', date: '' });
+
+    // Assignment & Viewing
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
     const [selectedResourceId, setSelectedResourceId] = useState<string>('');
     const [assignMsg, setAssignMsg] = useState('');
-    const [selectedPatientReports, setSelectedPatientReports] = useState<PatientReport[]>([]);
-    const [patientPendingTasks, setPatientPendingTasks] = useState<SurveyAssignment[]>([]);
-    const [patientCompletedTasks, setPatientCompletedTasks] = useState<SurveyAssignment[]>([]);
-    const [isViewingPatientDetails, setIsViewingPatientDetails] = useState(false);
-    
-    // Detailed Views (Modals)
     const [selectedReport, setSelectedReport] = useState<PatientReport | null>(null);
     const [viewingAssignment, setViewingAssignment] = useState<SurveyAssignment | null>(null);
-    
-    // Template Preview
     const [viewingTemplate, setViewingTemplate] = useState<SurveyTemplate | null>(null);
 
-    // Review Tab State & Filters
-    const [filterPatient, setFilterPatient] = useState('all');
-    const [filterType, setFilterType] = useState<'all' | 'survey' | 'naretbox'>('all');
-    const [filterTemplate, setFilterTemplate] = useState('all');
+    // Review Tab Filter
     const [filterRisk, setFilterRisk] = useState(false);
 
-    const fetchData = async () => {
+    // --- EFFECTS ---
+
+    useEffect(() => {
+        fetchGlobalData();
+    }, [user.id, activeSection]);
+
+    // Load Patient Specific Data when Modal Opens
+    useEffect(() => {
+        if (selectedPatientId && isViewingPatientDetails) {
+            loadPatientRecord(selectedPatientId);
+        }
+    }, [selectedPatientId, isViewingPatientDetails]);
+
+    const fetchGlobalData = async () => {
         try {
             const myPatients = await getMyPatients(user.id);
             setPatients(myPatients);
@@ -100,248 +201,214 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             setAllReports(myReports);
             const myResources = await getResourcesByPsychologist(user.id);
             setResources(myResources);
-        } catch (error) {
-            console.error("Error fetching dashboard data", error);
-        }
+        } catch (error) { console.error(error); }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, [user.id, activeSection]);
+    const loadPatientRecord = async (pid: string) => {
+        const p = patients.find(u => u.id === pid);
+        setCurrentPatient(p || null);
+        setBasicForm(p || {});
 
-    useEffect(() => {
-        const fetchPatientDetails = async () => {
-            if(selectedPatientId) {
-                const reports = await getReportsForPatient(selectedPatientId);
-                setSelectedPatientReports(reports);
-                const allAssignments = await getAllSurveysForPatient(selectedPatientId);
-                setPatientPendingTasks(allAssignments.filter(a => a.status === 'pending'));
-                setPatientCompletedTasks(allAssignments.filter(a => a.status === 'completed'));
-            } else {
-                setSelectedPatientReports([]);
-                setPatientPendingTasks([]);
-                setPatientCompletedTasks([]);
-            }
-        };
-        fetchPatientDetails();
-    }, [selectedPatientId]);
+        const cProfile = await getClinicalProfile(pid);
+        setClinicalProfile(cProfile);
+        setClinicalForm(cProfile || { riskLevel: 'Bajo' });
+
+        const sess = await getClinicalSessions(pid);
+        setSessions(sess);
+
+        const g = await getTreatmentGoals(pid);
+        setGoals(g);
+
+        const f = await getFinancials(pid);
+        setFinancials(f);
+
+        const r = await getReminders(pid);
+        setReminders(r);
+
+        const reps = await getReportsForPatient(pid);
+        setSelectedPatientReports(reps);
+
+        const sur = await getAllSurveysForPatient(pid);
+        setPatientSurveys(sur);
+    };
+
+    // --- ACTIONS ---
 
     const handleCreatePatient = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
             await registerUser(pName, pEmail, pPassword, 'patient', user.id, pSurnames, pPhone);
             setCreateMsg('Paciente registrado con éxito');
-            await fetchData();
+            await fetchGlobalData();
             setPName(''); setPSurnames(''); setPEmail(''); setPPhone(''); setPPassword('');
             setTimeout(() => { setCreateMsg(''); setIsCreatingPatient(false); }, 2000);
         } catch (error: any) { setCreateMsg('Error: ' + error.message); }
     };
 
-    // Builder Logic
-    const addQuestion = (type: QuestionType) => { const newQ: SurveyQuestion = { id: crypto.randomUUID(), type, text: '', options: type === 'multiple_choice' ? ['Opción 1', 'Opción 2'] : undefined }; setQuestions([...questions, newQ]); };
-    const updateQuestionText = (id: string, text: string) => setQuestions(questions.map(q => q.id === id ? { ...q, text } : q));
-    const updateOptionText = (qId: string, optIdx: number, text: string) => setQuestions(questions.map(q => { if (q.id !== qId || !q.options) return q; const newOpts = [...q.options]; newOpts[optIdx] = text; return { ...q, options: newOpts }; }));
-    const addOption = (qId: string) => setQuestions(questions.map(q => { if (q.id !== qId || !q.options) return q; return { ...q, options: [...q.options, `Opción ${q.options.length + 1}`] }; }));
-    const removeOption = (qId: string, optIdx: number) => setQuestions(questions.map(q => { if (q.id !== qId || !q.options || q.options.length <= 2) return q; const newOpts = q.options.filter((_, idx) => idx !== optIdx); return { ...q, options: newOpts }; }));
-    const saveTemplate = async () => { if (!newTemplateTitle.trim() || questions.length === 0) return; const template: SurveyTemplate = { id: crypto.randomUUID(), psychologistId: user.id, title: newTemplateTitle, description: 'Creada por ' + user.name, questions, createdAt: Date.now() }; try { await saveSurveyTemplate(template); setTemplates(prev => [...prev, template]); setNewTemplateTitle(''); setQuestions([]); setIsBuilderMode(false); alert('Plantilla guardada con éxito'); } catch (e) { console.error(e); alert('Error al guardar la plantilla'); } };
-
-    // Resource Logic
-    const handleSaveResource = async () => {
-        if(!resTitle || !resUrl) return;
+    const saveBasicInfo = async () => {
+        if (!selectedPatientId) return;
         try {
-            await saveResource({
-                id: crypto.randomUUID(),
-                psychologistId: user.id,
-                title: resTitle,
-                description: resDesc,
-                type: resType,
-                url: resUrl,
-                createdAt: Date.now()
-            });
-            setResTitle(''); setResDesc(''); setResUrl(''); setIsResourceMode(false);
-            const myResources = await getResourcesByPsychologist(user.id);
-            setResources(myResources);
-            alert("Recurso añadido correctamente.");
-        } catch(e: any) { alert("Error: " + e.message); }
+            await updatePatientBasicInfo(selectedPatientId, basicForm);
+            setIsEditingBasic(false);
+            const updatedPatients = patients.map(p => p.id === selectedPatientId ? { ...p, ...basicForm } : p);
+            setPatients(updatedPatients);
+            setCurrentPatient(prev => prev ? ({ ...prev, ...basicForm }) : null);
+        } catch (e) { alert("Error al guardar información básica"); }
     };
 
-    const handleAssignResource = async () => {
-        if(!selectedPatientId || !selectedResourceId) return;
+    const saveClinicalInfo = async () => {
+        if (!selectedPatientId) return;
         try {
-            await assignResourceToPatient(selectedResourceId, selectedPatientId, user.id);
-            setAssignMsg("Recurso enviado al paciente.");
-            setTimeout(() => setAssignMsg(''), 3000);
-        } catch(e: any) { setAssignMsg("Error: " + e.message); }
+            // Ensure array type for pre-existing conditions if user entered comma-separated string
+            const profileToSave = { ...clinicalForm, userId: selectedPatientId };
+            if(typeof profileToSave.preexistingConditions === 'string') {
+                profileToSave.preexistingConditions = (profileToSave.preexistingConditions as string).split(',').map((s: string) => s.trim());
+            }
+            await saveClinicalProfile(profileToSave);
+            setClinicalProfile(profileToSave as ClinicalProfile);
+            setIsEditingClinical(false);
+        } catch (e) { alert("Error al guardar perfil clínico"); }
+    };
+
+    const addSession = async () => {
+        if (!selectedPatientId) return;
+        try {
+            await saveClinicalSession({
+                patientId: selectedPatientId,
+                psychologistId: user.id,
+                date: sessionForm.date ? new Date(sessionForm.date as any).getTime() : Date.now(),
+                objectives: sessionForm.objectives || '',
+                summary: sessionForm.summary || '',
+                notes: sessionForm.notes || '',
+                progress: sessionForm.progress || 0,
+                nextSteps: sessionForm.nextSteps || ''
+            });
+            const fresh = await getClinicalSessions(selectedPatientId);
+            setSessions(fresh);
+            setIsAddingSession(false);
+            setSessionForm({});
+        } catch (e) { alert("Error al guardar sesión"); }
+    };
+
+    const addGoal = async () => {
+        if (!selectedPatientId) return;
+        try {
+            await saveTreatmentGoal({
+                patientId: selectedPatientId,
+                description: goalForm.desc,
+                type: goalForm.type as any,
+                status: 'pending',
+                createdAt: Date.now()
+            });
+            const fresh = await getTreatmentGoals(selectedPatientId);
+            setGoals(fresh);
+            setIsAddingGoal(false);
+            setGoalForm({ desc: '', type: 'short_term' });
+        } catch (e) { alert("Error al añadir objetivo"); }
+    };
+
+    const addFinance = async () => {
+        if (!selectedPatientId) return;
+        try {
+            await saveFinancialRecord({
+                patientId: selectedPatientId,
+                date: financeForm.date ? new Date(financeForm.date as any).getTime() : Date.now(),
+                concept: financeForm.concept || 'Sesión Terapia',
+                amount: financeForm.amount || 0,
+                status: financeForm.status as any || 'pending',
+                method: financeForm.method as any || 'card'
+            });
+            const fresh = await getFinancials(selectedPatientId);
+            setFinancials(fresh);
+            setIsAddingFinance(false);
+            setFinanceForm({});
+        } catch (e) { alert("Error al guardar registro financiero"); }
+    };
+
+    const addReminder = async () => {
+        if(!selectedPatientId) return;
+        try {
+             await saveReminder({
+                 patientId: selectedPatientId,
+                 psychologistId: user.id,
+                 title: reminderForm.title,
+                 date: new Date(reminderForm.date).getTime(),
+                 isCompleted: false
+             });
+             const fresh = await getReminders(selectedPatientId);
+             setReminders(fresh);
+             setIsAddingReminder(false);
+             setReminderForm({ title: '', date: '' });
+        } catch(e) { alert("Error al crear recordatorio"); }
     };
 
     const handleAssign = async () => {
-        if (!selectedPatientId || !selectedTemplateId) return;
-        let template = templates.find(t => t.id === selectedTemplateId);
-        if (selectedTemplateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) template = INITIAL_MENTAL_HEALTH_ASSESSMENT;
-        if (selectedTemplateId === BDI_II_ASSESSMENT.id) template = BDI_II_ASSESSMENT;
+        if (!selectedPatientId || !selectedTemplateId) {
+            alert("Selecciona un paciente y una plantilla.");
+            return;
+        }
         
-        if (template) { try { await assignSurveyToPatient(template, selectedPatientId, user.id); setAssignMsg('Encuesta enviada correctamente.'); const allAssignments = await getAllSurveysForPatient(selectedPatientId); setPatientPendingTasks(allAssignments.filter(a => a.status === 'pending')); setTimeout(() => setAssignMsg(''), 3000); } catch (e: any) { console.error(e); setAssignMsg('Error al enviar la encuesta: ' + e.message); } }
+        const staticTemplates = [INITIAL_MENTAL_HEALTH_ASSESSMENT, BDI_II_ASSESSMENT];
+        const template = templates.find(t => t.id === selectedTemplateId) || staticTemplates.find(t => t.id === selectedTemplateId);
+        
+        if (!template) {
+            alert("Error: Plantilla no encontrada.");
+            return;
+        }
+
+        try {
+            await assignSurveyToPatient(template, selectedPatientId, user.id);
+            alert("Evaluación asignada correctamente.");
+            const sur = await getAllSurveysForPatient(selectedPatientId);
+            setPatientSurveys(sur);
+            setSelectedTemplateId('');
+        } catch (e) {
+            alert("Error al asignar la evaluación.");
+            console.error(e);
+        }
     };
 
-    const getPatientName = (id: string) => { const p = patients.find(pat => pat.id === id); return p ? `${p.name} ${p.surnames || ''}` : 'Usuario desconocido'; };
+    const modalStats = useMemo(() => {
+        // Naretbox Chart Data
+        const naretData = (selectedPatientReports || [])
+            .sort((a, b) => a.date - b.date)
+            .slice(-7)
+            .map(r => ({
+                date: new Date(r.date).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }),
+                Positivo: r.content.positives.length,
+                Negativo: r.content.negatives.length
+            }));
+
+        // BDI Score Evolution Data
+        const bdiData = (patientSurveys || [])
+            .filter(s => s.status === 'completed' && s.templateId === BDI_II_ASSESSMENT.id && s.responses)
+            .sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0))
+            .map(s => ({
+                date: new Date(s.completedAt || 0).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }),
+                score: calculateBDIScore(s.responses!).score
+            }));
+
+        return { naretData, bdiData };
+    }, [selectedPatientReports, patientSurveys]);
+
+    const activeTasks = useMemo(() => patientSurveys.filter(s => s.status === 'pending'), [patientSurveys]);
+
+    // --- UTILS ---
     const getQuestionText = (templateId: string, qId: string) => { 
         if (templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) { const q = INITIAL_MENTAL_HEALTH_ASSESSMENT.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta'; } 
         if (templateId === BDI_II_ASSESSMENT.id) { const q = BDI_II_ASSESSMENT.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta'; } 
         const temp = templates.find(t => t.id === templateId); if (!temp) return 'Pregunta no encontrada'; const q = temp.questions.find(qu => qu.id === qId); return q ? q.text : 'Pregunta eliminada'; 
     };
 
-    const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || (p.surnames && p.surnames.toLowerCase().includes(patientSearchTerm.toLowerCase())) || p.email.toLowerCase().includes(patientSearchTerm.toLowerCase()));
+    const displayTemplates = templates.filter(t => t.id !== INITIAL_MENTAL_HEALTH_ASSESSMENT.id && t.id !== BDI_II_ASSESSMENT.id);
+
+    // --- RENDER MAIN UI ---
     
-    // Filter duplicates
-    const displayTemplates = templates.filter(t => 
-        t.id !== INITIAL_MENTAL_HEALTH_ASSESSMENT.id && 
-        t.id !== BDI_II_ASSESSMENT.id &&
-        t.title !== INITIAL_MENTAL_HEALTH_ASSESSMENT.title &&
-        t.title !== BDI_II_ASSESSMENT.title
-    );
-
-    // Chart Data & Stats logic
-    const totalPatients = patients.length; 
-    const totalReports = allReports.length;
-    const completedSurveys = assignments.filter(a => a.status === 'completed');
-    const riskAlerts = completedSurveys.filter(a => { 
-        if (!a.responses) return false;
-        if (a.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) { const score = calculateMentalHealthScore(a.responses); return score.redFlags.length > 0 || score.depression.level === 'Grave' || score.anxiety.level === 'Grave'; } 
-        if (a.templateId === BDI_II_ASSESSMENT.id) { const score = calculateBDIScore(a.responses); return score.hasSuicidalRisk || score.level === 'Depresión grave'; }
-        return false; 
-    }).length;
-
-    const getUnifiedResults = () => {
-        const surveyItems = assignments.filter(a => a.status === 'completed').map(a => { 
-            let isRisk = false; 
-            if (a.responses) {
-                if (a.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) { const score = calculateMentalHealthScore(a.responses); isRisk = score.redFlags.length > 0 || score.depression.level === 'Grave'; } 
-                else if (a.templateId === BDI_II_ASSESSMENT.id) { const score = calculateBDIScore(a.responses); isRisk = score.hasSuicidalRisk || score.level === 'Depresión grave'; }
-            }
-            return { type: 'survey' as const, id: a.id, date: a.completedAt || 0, title: a.templateTitle, patientId: a.patientId, details: a, isRisk }; 
-        });
-        const reportItems = allReports.map(r => ({ type: 'naretbox' as const, id: r.id, date: r.date, title: 'Informe Naretbox', patientId: r.patientId, details: r, isRisk: false }));
-        let combined = [...surveyItems, ...reportItems];
-        if (filterPatient !== 'all') combined = combined.filter(i => i.patientId === filterPatient);
-        if (filterType !== 'all') combined = combined.filter(i => i.type === filterType);
-        if (filterRisk) combined = combined.filter(i => i.isRisk);
-        if (filterTemplate !== 'all' && filterType !== 'naretbox') combined = combined.filter(i => i.type === 'survey' && (i.details as SurveyAssignment).templateId === filterTemplate);
-        return combined.sort((a, b) => b.date - a.date);
-    };
-    const unifiedResults = getUnifiedResults();
-    const getPatientHistory = () => { const reports = selectedPatientReports.map(r => ({ ...r, type: 'report' })); const surveys = patientCompletedTasks.map(s => ({ ...s, type: 'survey', date: s.completedAt || 0 })); return [...reports, ...surveys].sort((a, b) => b.date - a.date); };
-    const patientHistory = getPatientHistory();
-
-    const SurveyResultView = ({ assignment }: { assignment: SurveyAssignment }) => {
-        if (assignment.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) {
-             const score = calculateMentalHealthScore(assignment.responses!);
-             return ( <div className="space-y-6"> {score.redFlags.length > 0 && (<div className="bg-red-500/20 border border-red-500 text-red-100 p-4 rounded-xl flex items-start gap-3"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg><div><p className="font-bold">ATENCIÓN REQUERIDA</p><ul className="list-disc list-inside text-sm mt-1">{score.redFlags.map((flag, i) => <li key={i}>{flag}</li>)}</ul></div></div>)} <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{[score.depression, score.anxiety, score.stress].map((metric, i) => (<div key={i} className="bg-slate-900 border border-slate-700 p-5 rounded-xl"><div className="flex justify-between items-center mb-2"><h4 className="font-bold text-slate-300 uppercase tracking-wider text-xs">{i === 0 ? 'Depresión' : i === 1 ? 'Ansiedad' : 'Estrés'}</h4><span className={`text-sm font-bold ${metric.color}`}>{metric.level}</span></div><div className="w-full bg-slate-800 h-2 rounded-full mb-3"><div className={`h-2 rounded-full ${metric.color.replace('text-', 'bg-')}`} style={{ width: `${(metric.rawScore / metric.maxScore) * 100}%` }}></div></div><p className="text-xs text-slate-400">{metric.advice}</p></div>))}</div> <div className="bg-slate-900 p-4 rounded-xl border border-slate-800"><h4 className="font-bold text-slate-300 text-sm mb-4">Respuestas Detalladas</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{assignment.responses?.map((resp, rIdx) => (<div key={rIdx} className="text-sm"><p className="text-slate-500 mb-1">{getQuestionText(INITIAL_MENTAL_HEALTH_ASSESSMENT.id, resp.questionId).substring(0, 60)}...</p><p className="text-white font-medium pl-2 border-l-2 border-slate-700">{resp.answer}</p></div>))}</div></div> </div> );
-        }
-        if (assignment.templateId === BDI_II_ASSESSMENT.id) {
-            const score = calculateBDIScore(assignment.responses!);
-            return (
-                <div className="space-y-6">
-                    {score.hasSuicidalRisk && (
-                        <div className="bg-red-500/20 border border-red-500 text-red-100 p-4 rounded-xl flex items-start gap-3 animate-pulse">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                            <div>
-                                <p className="font-bold">RIESGO DE SUICIDIO DETECTADO</p>
-                                <p className="text-sm">El paciente indicó pensamientos relacionados con el daño autoinfligido en la pregunta #20.</p>
-                            </div>
-                        </div>
-                    )}
-                    <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl flex items-center justify-between">
-                        <div>
-                            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Puntuación Total BDI-II</p>
-                            <p className="text-4xl font-bold text-white mt-1">{score.score} <span className="text-lg text-slate-500 font-normal">/ 63</span></p>
-                        </div>
-                        <div className="text-right">
-                             <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Interpretación</p>
-                             <p className={`text-2xl font-bold ${score.color} mt-1`}>{score.level}</p>
-                        </div>
-                    </div>
-                     <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                        <h4 className="font-bold text-slate-300 text-sm mb-4">Respuestas Detalladas</h4>
-                        <div className="space-y-3">
-                            {assignment.responses?.map((resp, rIdx) => (
-                                <div key={rIdx} className="text-sm bg-slate-800/50 p-3 rounded-lg border border-slate-800">
-                                    <p className="text-slate-400 mb-1 text-xs uppercase font-bold">{getQuestionText(BDI_II_ASSESSMENT.id, resp.questionId).split('.')[1] || 'Pregunta'}</p>
-                                    <p className="text-white font-medium">{resp.answer}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-        return ( <div className="space-y-6 max-w-3xl">{assignment.responses?.map((resp, idx) => (<div key={idx} className="bg-slate-900 border border-slate-800 p-5 rounded-xl"><p className="text-brand-500 text-xs font-bold uppercase tracking-widest mb-2">Pregunta {idx + 1}</p><p className="text-slate-300 text-sm mb-3 font-medium border-b border-slate-800 pb-2">{getQuestionText(assignment.templateId, resp.questionId)}</p><p className="text-white text-lg font-light pl-2 border-l-2 border-brand-500">{resp.answer}</p></div>))}</div> );
-    };
-
-    // Calculate Dynamic Stats for Modal
-    let modalStats = {
-        naretboxBalance: 0,
-        naretboxPositives: 0,
-        naretboxNegatives: 0,
-        completedTasks: 0,
-        pendingTasks: 0,
-        adherenceRate: 0,
-        chartData: [] as any[],
-        latestClinical: null as any
-    };
-
-    if (selectedPatientId && isViewingPatientDetails) {
-        // Naretbox Stats
-        modalStats.naretboxPositives = selectedPatientReports.reduce((acc, r) => acc + r.content.positives.length, 0);
-        modalStats.naretboxNegatives = selectedPatientReports.reduce((acc, r) => acc + r.content.negatives.length, 0);
-        modalStats.naretboxBalance = modalStats.naretboxPositives + modalStats.naretboxNegatives > 0 
-            ? Math.round((modalStats.naretboxPositives / (modalStats.naretboxPositives + modalStats.naretboxNegatives)) * 100) 
-            : 50;
-
-        // Chart Data (Last 7 reports)
-        modalStats.chartData = selectedPatientReports.slice(0, 7).reverse().map(r => ({
-            date: new Date(r.date).toLocaleDateString(undefined, {month:'short', day:'numeric'}),
-            Positivo: r.content.positives.length,
-            Negativo: r.content.negatives.length
-        }));
-
-        // Task Stats
-        modalStats.completedTasks = patientCompletedTasks.length;
-        modalStats.pendingTasks = patientPendingTasks.length;
-        modalStats.adherenceRate = (modalStats.completedTasks + modalStats.pendingTasks) > 0 
-            ? Math.round((modalStats.completedTasks / (modalStats.completedTasks + modalStats.pendingTasks)) * 100)
-            : 0;
-
-        // Latest Clinical Result
-        const latestInitial = patientCompletedTasks.find(t => t.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id);
-        const latestBDI = patientCompletedTasks.find(t => t.templateId === BDI_II_ASSESSMENT.id);
-        
-        // Prioritize newest
-        const newest = [latestInitial, latestBDI].sort((a,b) => (b?.completedAt || 0) - (a?.completedAt || 0))[0];
-        
-        if (newest && newest.responses) {
-            if (newest.templateId === INITIAL_MENTAL_HEALTH_ASSESSMENT.id) {
-                modalStats.latestClinical = { type: 'Initial', ...calculateMentalHealthScore(newest.responses) };
-            } else if (newest.templateId === BDI_II_ASSESSMENT.id) {
-                modalStats.latestClinical = { type: 'BDI', ...calculateBDIScore(newest.responses) };
-            }
-        }
-    }
-
-    const renderHeaderTitle = () => {
-        switch(activeSection) {
-            case 'overview': return 'Resumen Global';
-            case 'patients': return 'Gestión de Pacientes';
-            case 'tools': return 'Biblioteca de Herramientas';
-            case 'review': return 'Resultados y Seguimiento';
-            default: return 'Panel del Psicólogo';
-        }
-    };
-
     return (
         <div className="p-6 md:p-8 animate-fade-in max-w-7xl mx-auto pb-24 space-y-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-800 pb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-white">{renderHeaderTitle()}</h1>
+                    <h1 className="text-3xl font-bold text-white">Panel del Psicólogo</h1>
                     <p className="text-slate-400 mt-1">Gestión integral de pacientes y herramientas.</p>
                 </div>
             </div>
@@ -349,27 +416,18 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             {/* OVERVIEW TAB */}
             {activeSection === 'overview' && (
                 <div className="space-y-8 animate-slide-up">
-                    <div className="bg-gradient-to-r from-brand-900/20 to-slate-900 border border-slate-800 rounded-3xl p-8">
-                        <h2 className="text-2xl font-bold text-white mb-2">Bienvenido, {user.name}</h2>
-                        <p className="text-slate-400 max-w-2xl">
-                            Este es tu panel de control. Utiliza la barra lateral izquierda para navegar entre tus pacientes, crear herramientas y revisar resultados.
-                        </p>
-                    </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <StatCard 
+                            title="Total Pacientes" 
+                            value={patients.length} 
+                            icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>} 
+                            colorClass="bg-brand-500/20 text-brand-400"
+                        />
+                         <StatCard 
                             title="Informes Recibidos" 
-                            value={totalReports} 
+                            value={allReports.length} 
                             icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} 
                             colorClass="bg-emerald-500/20 text-emerald-400"
-                            onClick={() => { setFilterType('naretbox'); onSectionChange('review'); }}
-                        />
-                        <StatCard 
-                            title="Alertas de Riesgo" 
-                            value={riskAlerts} 
-                            icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>} 
-                            colorClass={`${riskAlerts > 0 ? 'bg-red-500/20 text-red-500' : 'bg-slate-800 text-slate-500'}`}
-                            onClick={() => { setFilterRisk(true); onSectionChange('review'); }}
                         />
                     </div>
                 </div>
@@ -378,355 +436,470 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             {/* PATIENTS TAB */}
             {activeSection === 'patients' && (
                 <div className="space-y-6 animate-fade-in">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <h2 className="text-xl font-bold text-slate-200">Listado</h2>
                          <div className="flex gap-3 w-full md:w-auto">
-                            <div className="relative flex-1 md:w-64"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span><input type="text" value={patientSearchTerm} onChange={(e) => setPatientSearchTerm(e.target.value)} placeholder="Buscar por nombre..." className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-white outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"/></div>
-                            <button onClick={() => setIsCreatingPatient(true)} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg flex items-center gap-2 whitespace-nowrap"><span className="hidden md:inline">Nuevo Paciente</span><span className="md:hidden">+</span></button>
+                            <input type="text" value={patientSearchTerm} onChange={(e) => setPatientSearchTerm(e.target.value)} placeholder="Buscar por nombre..." className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white outline-none"/>
+                            <button onClick={() => setIsCreatingPatient(true)} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-xl font-bold text-sm">Nuevo Paciente</button>
                         </div>
                     </div>
-                    {isCreatingPatient && (<div className="mb-6 p-6 bg-slate-900 border border-slate-700 rounded-3xl animate-slide-up shadow-2xl relative z-20"><div className="flex justify-between mb-4"><h3 className="text-white font-bold">Registrar Nuevo Paciente</h3><button onClick={() => setIsCreatingPatient(false)} className="text-slate-500 hover:text-white">✕</button></div>{createMsg && <p className={`text-sm mb-3 ${createMsg.includes('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{createMsg}</p>}<form onSubmit={handleCreatePatient} className="grid grid-cols-1 md:grid-cols-2 gap-4"><input className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-white text-sm outline-none focus:border-brand-500" placeholder="Nombre" value={pName} onChange={e => setPName(e.target.value)} required /><input className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-white text-sm outline-none focus:border-brand-500" placeholder="Apellidos" value={pSurnames} onChange={e => setPSurnames(e.target.value)} required /><input className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-white text-sm outline-none focus:border-brand-500" placeholder="Email" type="email" value={pEmail} onChange={e => setPEmail(e.target.value)} required /><input className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-white text-sm outline-none focus:border-brand-500" placeholder="Teléfono" value={pPhone} onChange={e => setPPhone(e.target.value)} /><input className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-white text-sm md:col-span-2 outline-none focus:border-brand-500" placeholder="Contraseña Temporal" type="password" value={pPassword} onChange={e => setPPassword(e.target.value)} required /><button type="submit" className="md:col-span-2 bg-brand-500 text-white font-bold py-3 rounded-xl hover:bg-brand-600 transition-colors shadow-lg">Crear Cuenta Paciente</button></form></div>)}
+                    {isCreatingPatient && (
+                        <div className="p-6 bg-slate-900 border border-slate-700 rounded-3xl mb-6">
+                            <form onSubmit={handleCreatePatient} className="grid grid-cols-2 gap-4">
+                                <input className="bg-slate-800 p-2 text-white rounded" placeholder="Nombre" value={pName} onChange={e => setPName(e.target.value)} required />
+                                <input className="bg-slate-800 p-2 text-white rounded" placeholder="Email" value={pEmail} onChange={e => setPEmail(e.target.value)} required />
+                                <input className="bg-slate-800 p-2 text-white rounded" placeholder="Password" value={pPassword} onChange={e => setPPassword(e.target.value)} required />
+                                <button type="submit" className="bg-brand-500 text-white rounded p-2">Crear</button>
+                            </form>
+                        </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredPatients.length === 0 ? (<div className="col-span-full py-10 text-center text-slate-500 italic bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed">{patients.length === 0 ? "No tienes pacientes asignados aún." : "No se encontraron pacientes con ese nombre."}</div>) : (filteredPatients.map(p => (<div key={p.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-brand-500/50 transition-all hover:shadow-xl group flex flex-col justify-between"><div className="flex items-start gap-4 mb-4"><div className="w-14 h-14 rounded-full bg-slate-800 overflow-hidden border-2 border-slate-700 group-hover:border-brand-500/50 transition-colors">{p.photoUrl ? (<img src={p.photoUrl} alt={p.name} className="w-full h-full object-cover" />) : (<div className="w-full h-full flex items-center justify-center text-xl font-bold text-slate-500">{p.name.charAt(0)}</div>)}</div><div><h3 className="font-bold text-lg text-white group-hover:text-brand-300 transition-colors">{p.name} {p.surnames}</h3><p className="text-sm text-slate-400">{p.email}</p></div></div><div className="mt-auto space-y-3"><div className="grid grid-cols-2 gap-2"><button onClick={() => { setSelectedPatientId(p.id); setIsViewingPatientDetails(true); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 rounded-lg transition-colors border border-slate-700">Ver Perfil</button><button onClick={() => { setSelectedPatientId(p.id); setIsViewingPatientDetails(true); }} className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 text-xs font-bold py-2 rounded-lg transition-colors">Asignar Tarea</button></div></div></div>)))}
+                        {patients.filter(p => p.name.toLowerCase().includes(patientSearchTerm.toLowerCase())).map(p => (
+                            <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-brand-500/50 transition-all cursor-pointer" onClick={() => { setSelectedPatientId(p.id); setIsViewingPatientDetails(true); }}>
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-500">{p.name.charAt(0)}</div>
+                                    <div><h3 className="font-bold text-white">{p.name} {p.surnames}</h3><p className="text-sm text-slate-400">{p.email}</p></div>
+                                </div>
+                                <div className="text-xs text-brand-400 font-bold uppercase tracking-wider">Ver Expediente Clínico &rarr;</div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
-
-            {/* TOOLS TAB - WITH INFOGRAPHICS */}
-            {activeSection === 'tools' && (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="flex gap-4 border-b border-slate-800 mb-6">
-                        <button onClick={() => setToolSubTab('surveys')} className={`pb-2 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${toolSubTab === 'surveys' ? 'text-brand-400 border-brand-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}>Evaluaciones</button>
-                        <button onClick={() => setToolSubTab('resources')} className={`pb-2 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${toolSubTab === 'resources' ? 'text-brand-400 border-brand-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}>Infografía y Recursos</button>
+            
+            {/* FULL CLINICAL RECORD MODAL */}
+            {isViewingPatientDetails && selectedPatientId && createPortal(
+                <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col animate-scale-in overflow-hidden">
+                    {/* Header */}
+                    <div className="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shrink-0">
+                         <div className="flex items-center gap-4">
+                             <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold">{currentPatient?.name.charAt(0)}</div>
+                             <div>
+                                 <h2 className="text-xl font-bold text-white">{currentPatient?.name} {currentPatient?.surnames}</h2>
+                                 <div className="flex gap-4 text-xs text-slate-400">
+                                     <span>{currentPatient?.email}</span>
+                                     <span>|</span>
+                                     <span>{currentPatient?.phone || 'Sin teléfono'}</span>
+                                 </div>
+                             </div>
+                         </div>
+                         <button onClick={() => setIsViewingPatientDetails(false)} className="bg-slate-800 text-slate-400 px-4 py-2 rounded-lg hover:text-white">Cerrar Expediente</button>
                     </div>
 
-                    {toolSubTab === 'surveys' && (
-                         !isBuilderMode ? (
-                            <>
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-200 mb-4 flex items-center gap-2"><span className="w-1 h-6 bg-brand-500 rounded-full"></span>Evaluaciones Estándar</h2>
+                    {/* Navigation Tabs */}
+                    <div className="bg-slate-900 border-b border-slate-800 px-4 flex gap-6 overflow-x-auto shrink-0">
+                        {[
+                            { id: 'general', label: '1. Información Básica' },
+                            { id: 'clinical', label: '2. Historial Clínico' },
+                            { id: 'treatment', label: '3. Tratamiento' },
+                            { id: 'evaluations', label: '4. Evaluaciones' },
+                            { id: 'admin', label: '5. Administrativo' }
+                        ].map(tab => (
+                            <button 
+                                key={tab.id}
+                                onClick={() => setActiveRecordTab(tab.id as any)}
+                                className={`py-4 text-sm font-bold uppercase tracking-wide border-b-2 transition-colors whitespace-nowrap ${activeRecordTab === tab.id ? 'border-brand-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Content Area */}
+                    <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-950">
+                        <div className="max-w-6xl mx-auto space-y-8">
+                            
+                            {/* TAB 1: GENERAL INFO */}
+                            {activeRecordTab === 'general' && (
+                                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                    <div className="flex justify-between mb-6">
+                                        <h3 className="text-lg font-bold text-white">Datos del Paciente</h3>
+                                        <button onClick={() => isEditingBasic ? saveBasicInfo() : setIsEditingBasic(true)} className="text-brand-400 font-bold text-sm">
+                                            {isEditingBasic ? 'Guardar Cambios' : 'Editar Información'}
+                                        </button>
+                                    </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-brand-500/30 rounded-2xl p-6 hover:border-brand-500 transition-all flex flex-col h-full shadow-lg shadow-brand-900/10">
-                                            <div className="flex items-start justify-between mb-4"><div className="p-3 bg-brand-500 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div><span className="text-[10px] uppercase bg-brand-900/30 text-brand-300 px-2 py-1 rounded font-bold border border-brand-500/30">Recomendado</span></div>
-                                            <h3 className="font-bold text-lg text-white mb-2">{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</h3>
-                                            <p className="text-slate-400 text-sm mb-6 flex-1">{INITIAL_MENTAL_HEALTH_ASSESSMENT.description}</p>
-                                            <div className="mt-auto space-y-2">
-                                                <button onClick={() => setViewingTemplate(INITIAL_MENTAL_HEALTH_ASSESSMENT)} className="w-full bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded-lg hover:text-white transition-colors">Ver Preguntas (Preview)</button>
-                                                <button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg">Asignar a Paciente</button>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Fecha Nacimiento</label>
+                                            {isEditingBasic ? <input type="date" className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.birthDate || ''} onChange={e => setBasicForm({...basicForm, birthDate: e.target.value})} /> : <p className="text-white">{currentPatient?.birthDate || 'No registrada'}</p>}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Edad</label>
+                                            <p className="text-white">{currentPatient?.birthDate ? Math.floor((Date.now() - new Date(currentPatient.birthDate).getTime()) / 31557600000) + ' años' : '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Género</label>
+                                            {isEditingBasic ? <select className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.gender || ''} onChange={e => setBasicForm({...basicForm, gender: e.target.value})}><option value="">Selec...</option><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option><option value="No Binario">No Binario</option><option value="Otro">Otro</option></select> : <p className="text-white">{currentPatient?.gender || '-'}</p>}
+                                        </div>
+                                        <div className="space-y-1 md:col-span-2">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Dirección</label>
+                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.address || ''} onChange={e => setBasicForm({...basicForm, address: e.target.value})} /> : <p className="text-white">{currentPatient?.address || '-'}</p>}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Email</label>
+                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.email || ''} onChange={e => setBasicForm({...basicForm, email: e.target.value})} /> : <p className="text-white">{currentPatient?.email || '-'}</p>}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Teléfono</label>
+                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.phone || ''} onChange={e => setBasicForm({...basicForm, phone: e.target.value})} /> : <p className="text-white">{currentPatient?.phone || '-'}</p>}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Ocupación</label>
+                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.occupation || ''} onChange={e => setBasicForm({...basicForm, occupation: e.target.value})} /> : <p className="text-white">{currentPatient?.occupation || '-'}</p>}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Estado Civil</label>
+                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.maritalStatus || ''} onChange={e => setBasicForm({...basicForm, maritalStatus: e.target.value})} /> : <p className="text-white">{currentPatient?.maritalStatus || '-'}</p>}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Seguro Médico</label>
+                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.insuranceNumber || ''} onChange={e => setBasicForm({...basicForm, insuranceNumber: e.target.value})} /> : <p className="text-white">{currentPatient?.insuranceNumber || 'N/A'}</p>}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Fuente de Referencia</label>
+                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.referralSource || ''} onChange={e => setBasicForm({...basicForm, referralSource: e.target.value})} /> : <p className="text-white">{currentPatient?.referralSource || '-'}</p>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TAB 2: CLINICAL HISTORY */}
+                            {activeRecordTab === 'clinical' && (
+                                <div className="space-y-6">
+                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                        <div className="flex justify-between mb-4">
+                                            <h3 className="text-lg font-bold text-white">Antecedentes Médicos y Diagnóstico</h3>
+                                            <button onClick={() => isEditingClinical ? saveClinicalInfo() : setIsEditingClinical(true)} className="text-brand-400 font-bold text-sm">
+                                                {isEditingClinical ? 'Guardar' : 'Editar'}
+                                            </button>
+                                        </div>
+                                        <div className="space-y-6">
+                                            {/* Reason & Diagnosis */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-slate-800">
+                                                <div>
+                                                    <label className="text-xs text-slate-500 uppercase font-bold">Motivo Consulta</label>
+                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" rows={3} value={clinicalForm.reasonForConsult || ''} onChange={e => setClinicalForm({...clinicalForm, reasonForConsult: e.target.value})} /> : <p className="text-white mt-1 bg-slate-800/50 p-3 rounded-lg border border-slate-800 text-sm leading-relaxed">{clinicalProfile?.reasonForConsult || 'Sin datos'}</p>}
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-slate-500 uppercase font-bold">Diagnóstico</label>
+                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" rows={3} value={clinicalForm.diagnosis || ''} onChange={e => setClinicalForm({...clinicalForm, diagnosis: e.target.value})} /> : <p className="text-white mt-1 bg-slate-800/50 p-3 rounded-lg border border-slate-800 text-sm font-bold">{clinicalProfile?.diagnosis || '-'}</p>}
+                                                </div>
+                                            </div>
+
+                                            {/* Risk */}
+                                            <div className="pb-6 border-b border-slate-800">
+                                                <div className="flex items-center gap-4 mb-2">
+                                                    <label className="text-xs text-slate-500 uppercase font-bold">Evaluación de Riesgo</label>
+                                                    {isEditingClinical ? (
+                                                        <select className="bg-slate-800 text-white p-1 rounded border border-slate-700 text-sm" value={clinicalForm.riskLevel || 'Bajo'} onChange={e => setClinicalForm({...clinicalForm, riskLevel: e.target.value as any})}><option value="Bajo">Bajo</option><option value="Medio">Medio</option><option value="Alto">Alto</option></select>
+                                                    ) : (
+                                                        <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${clinicalProfile?.riskLevel === 'Alto' ? 'bg-red-500 text-white' : clinicalProfile?.riskLevel === 'Medio' ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}`}>{clinicalProfile?.riskLevel || 'Bajo'}</span>
+                                                    )}
+                                                </div>
+                                                {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" placeholder="Detalles de riesgo (suicidio, autolesión, etc.)" value={clinicalForm.riskDetails || ''} onChange={e => setClinicalForm({...clinicalForm, riskDetails: e.target.value})} /> : <p className="text-slate-300 text-sm italic">{clinicalProfile?.riskDetails || 'Sin detalles de riesgo específicos.'}</p>}
+                                            </div>
+
+                                            {/* History Breakdown */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                <div>
+                                                    <label className="text-xs text-slate-500 uppercase font-bold">Condiciones Preexistentes</label>
+                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" placeholder="Separar por comas..." value={Array.isArray(clinicalForm.preexistingConditions) ? clinicalForm.preexistingConditions.join(', ') : (clinicalForm.preexistingConditions || '')} onChange={e => setClinicalForm({...clinicalForm, preexistingConditions: e.target.value as any})} /> : (
+                                                        <ul className="list-disc list-inside text-sm text-slate-300 mt-1">
+                                                            {clinicalProfile?.preexistingConditions?.length ? clinicalProfile.preexistingConditions.map((c,i) => <li key={i}>{c}</li>) : <li>Ninguna reportada</li>}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-slate-500 uppercase font-bold">Medicación Actual</label>
+                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" value={clinicalForm.currentMedication || ''} onChange={e => setClinicalForm({...clinicalForm, currentMedication: e.target.value})} /> : <p className="text-slate-300 text-sm mt-1">{clinicalProfile?.currentMedication || 'Ninguna'}</p>}
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-slate-500 uppercase font-bold">Tratamientos Anteriores</label>
+                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" value={clinicalForm.previousTreatments || ''} onChange={e => setClinicalForm({...clinicalForm, previousTreatments: e.target.value})} /> : <p className="text-slate-300 text-sm mt-1">{clinicalProfile?.previousTreatments || 'Ninguno'}</p>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* SESSIONS LIST */}
+                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h3 className="text-lg font-bold text-white">Historial de Sesiones</h3>
+                                            <button onClick={() => setIsAddingSession(true)} className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-brand-600">Nueva Sesión</button>
+                                        </div>
+                                        
+                                        {isAddingSession && (
+                                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 animate-slide-up">
+                                                <h4 className="font-bold text-white mb-4">Registrar Sesión</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                    <input type="date" className="bg-slate-900 border border-slate-700 rounded p-2 text-white" onChange={e => setSessionForm({...sessionForm, date: e.target.value as any})} />
+                                                    <input type="number" placeholder="Progreso (0-100)" className="bg-slate-900 border border-slate-700 rounded p-2 text-white" onChange={e => setSessionForm({...sessionForm, progress: parseInt(e.target.value)})} />
+                                                </div>
+                                                <textarea placeholder="Objetivos de la sesión" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white mb-2" rows={2} onChange={e => setSessionForm({...sessionForm, objectives: e.target.value})} />
+                                                <textarea placeholder="Resumen / Notas clínicas" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white mb-3" rows={3} onChange={e => setSessionForm({...sessionForm, summary: e.target.value})} />
+                                                <textarea placeholder="Próximos pasos" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white mb-4" rows={2} onChange={e => setSessionForm({...sessionForm, nextSteps: e.target.value})} />
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => setIsAddingSession(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
+                                                    <button onClick={addSession} className="bg-brand-500 text-white px-4 py-2 rounded font-bold">Guardar</button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-4">
+                                            {sessions.length === 0 ? <p className="text-slate-500 italic">No hay sesiones registradas.</p> : sessions.map(s => (
+                                                <div key={s.id} className="border-l-2 border-brand-500 pl-4 py-2 relative">
+                                                    <div className="absolute -left-[9px] top-2 w-4 h-4 rounded-full bg-brand-500 border-2 border-slate-900"></div>
+                                                    <div className="flex justify-between items-start">
+                                                        <span className="text-xs font-bold text-brand-400">{new Date(s.date).toLocaleDateString()}</span>
+                                                        <span className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded">Progreso: {s.progress}%</span>
+                                                    </div>
+                                                    <h4 className="text-white font-bold text-sm mt-1">{s.objectives}</h4>
+                                                    <p className="text-slate-400 text-sm mt-1">{s.summary}</p>
+                                                    {s.nextSteps && <p className="text-xs text-slate-500 mt-2 bg-slate-800/30 p-2 rounded">Next: {s.nextSteps}</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TAB 3: TREATMENT & GOALS */}
+                            {activeRecordTab === 'treatment' && (
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div className="space-y-6">
+                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                            <h3 className="text-lg font-bold text-white mb-4">Enfoque Terapéutico</h3>
+                                            <div className="relative">
+                                                <textarea 
+                                                    className="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-700 focus:border-brand-500 outline-none h-32 resize-none"
+                                                    placeholder="Describa el enfoque (ej. Terapia Cognitivo Conductual...)"
+                                                    value={clinicalProfile?.therapeuticApproach || ''}
+                                                    onChange={e => setClinicalProfile(prev => prev ? ({...prev, therapeuticApproach: e.target.value}) : null)}
+                                                    onBlur={() => saveClinicalProfile({ ...clinicalProfile, therapeuticApproach: clinicalProfile?.therapeuticApproach, userId: selectedPatientId })}
+                                                />
+                                                <span className="absolute bottom-2 right-2 text-[10px] text-slate-500">Auto-guardado al salir</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                            <div className="flex justify-between items-center mb-6">
+                                                <h3 className="text-lg font-bold text-white">Tareas Activas</h3>
+                                                <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">{activeTasks.length} pendientes</span>
+                                            </div>
+                                            <ul className="space-y-2">
+                                                {activeTasks.map(t => (
+                                                    <li key={t.id} className="flex items-center gap-2 text-sm text-slate-300">
+                                                        <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                                                        {t.templateTitle} (Asignado: {new Date(t.assignedAt).toLocaleDateString()})
+                                                    </li>
+                                                ))}
+                                                {activeTasks.length === 0 && <li className="text-slate-500 italic text-sm">No hay tareas pendientes.</li>}
+                                            </ul>
+                                        </div>
+                                        
+                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                            <h3 className="text-lg font-bold text-white mb-4">Feedback del Paciente</h3>
+                                            <div className="relative">
+                                                <textarea 
+                                                    className="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-700 focus:border-brand-500 outline-none h-32 resize-none"
+                                                    placeholder="Registro de comentarios sobre la eficacia del tratamiento..."
+                                                    value={clinicalProfile?.patientFeedback || ''}
+                                                    onChange={e => setClinicalProfile(prev => prev ? ({...prev, patientFeedback: e.target.value}) : null)}
+                                                    onBlur={() => saveClinicalProfile({ ...clinicalProfile, patientFeedback: clinicalProfile?.patientFeedback, userId: selectedPatientId })}
+                                                />
+                                                <span className="absolute bottom-2 right-2 text-[10px] text-slate-500">Auto-guardado al salir</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-fit">
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h3 className="text-lg font-bold text-white">Objetivos Terapéuticos</h3>
+                                            <button onClick={() => setIsAddingGoal(true)} className="text-brand-400 text-sm font-bold border border-brand-500/30 px-3 py-1 rounded hover:bg-brand-500/10">+ Añadir Objetivo</button>
+                                        </div>
+
+                                        {isAddingGoal && (
+                                            <div className="flex gap-2 mb-4 animate-slide-up">
+                                                <input className="flex-1 bg-slate-800 border border-slate-700 rounded p-2 text-white" placeholder="Descripción del objetivo" value={goalForm.desc} onChange={e => setGoalForm({...goalForm, desc: e.target.value})} />
+                                                <select className="bg-slate-800 border border-slate-700 rounded p-2 text-white" value={goalForm.type} onChange={e => setGoalForm({...goalForm, type: e.target.value})}>
+                                                    <option value="short_term">Corto Plazo</option>
+                                                    <option value="long_term">Largo Plazo</option>
+                                                </select>
+                                                <button onClick={addGoal} className="bg-emerald-500 text-white px-4 rounded font-bold">OK</button>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-3">
+                                            {goals.map(g => (
+                                                <div key={g.id} className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                                                    <button 
+                                                        onClick={() => updateTreatmentGoalStatus(g.id, g.status === 'achieved' ? 'pending' : 'achieved').then(() => loadPatientRecord(selectedPatientId))}
+                                                        className={`w-5 h-5 rounded border flex items-center justify-center ${g.status === 'achieved' ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'}`}
+                                                    >
+                                                        {g.status === 'achieved' && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                    </button>
+                                                    <div className="flex-1">
+                                                        <p className={`text-sm ${g.status === 'achieved' ? 'text-slate-500 line-through' : 'text-white'}`}>{g.description}</p>
+                                                        <span className="text-[10px] text-slate-500 uppercase font-bold">{g.type === 'short_term' ? 'Corto Plazo' : 'Largo Plazo'}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {goals.length === 0 && <p className="text-slate-500 italic text-sm">Sin objetivos definidos.</p>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TAB 4: EVALUATIONS (Surveys & Naretbox) */}
+                            {activeRecordTab === 'evaluations' && (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Emociones (Naretbox)</h3>
+                                              <div className="h-48 w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={modalStats.naretData}>
+                                                        <Bar dataKey="Positivo" fill="#10b981" radius={[2, 2, 0, 0]} />
+                                                        <Bar dataKey="Negativo" fill="#475569" radius={[2, 2, 0, 0]} />
+                                                        <RechartsTooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
+                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Evolución BDI-II (Depresión)</h3>
+                                            {modalStats.bdiData.length > 1 ? (
+                                                <div className="h-48 w-full">
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <LineChart data={modalStats.bdiData}>
+                                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                                            <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} />
+                                                            <YAxis stroke="#94a3b8" fontSize={10} domain={[0, 63]} />
+                                                            <RechartsTooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }} />
+                                                            <Line type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2} dot={{ r: 4 }} />
+                                                        </LineChart>
+                                                    </ResponsiveContainer>
+                                                </div>
+                                            ) : (
+                                                <div className="h-48 flex items-center justify-center text-slate-500 text-sm italic border border-dashed border-slate-700 rounded-xl">
+                                                    Se necesitan al menos 2 evaluaciones BDI-II para ver la tendencia.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                                            <h3 className="text-lg font-bold text-white">Historial de Evaluaciones</h3>
+                                            <div className="flex gap-2 w-full md:w-auto">
+                                                <select className="bg-slate-950 text-white p-2 rounded-lg border border-slate-700 text-sm flex-1 md:flex-none" onChange={(e) => setSelectedTemplateId(e.target.value)} value={selectedTemplateId}>
+                                                        <option value="">Nueva Evaluación...</option>
+                                                        <option value={INITIAL_MENTAL_HEALTH_ASSESSMENT.id}>{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</option>
+                                                        <option value={BDI_II_ASSESSMENT.id}>{BDI_II_ASSESSMENT.title}</option>
+                                                        {displayTemplates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                                                </select>
+                                                <button onClick={() => { handleAssign().then(() => loadPatientRecord(selectedPatientId)); }} className="bg-brand-500 text-white px-4 rounded-lg font-bold text-sm">Asignar</button>
                                             </div>
                                         </div>
                                         
-                                        {/* BDI-II CARD */}
-                                        <div className="bg-gradient-to-br from-indigo-900/20 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 hover:border-indigo-500 transition-all flex flex-col h-full shadow-lg relative overflow-hidden group">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
-                                            <div className="flex items-start justify-between mb-4 relative z-10">
-                                                <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></div>
-                                                <span className="text-[10px] uppercase bg-indigo-900/30 text-indigo-300 px-2 py-1 rounded font-bold border border-indigo-500/30">Depresión</span>
-                                            </div>
-                                            <h3 className="font-bold text-lg text-white mb-2 relative z-10">{BDI_II_ASSESSMENT.title}</h3>
-                                            <p className="text-slate-400 text-sm mb-6 flex-1 relative z-10">{BDI_II_ASSESSMENT.description}</p>
-                                            <div className="mt-auto space-y-2 relative z-10">
-                                                <button onClick={() => setViewingTemplate(BDI_II_ASSESSMENT)} className="w-full bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded-lg hover:text-white transition-colors">Ver Preguntas (Preview)</button>
-                                                <button onClick={() => { alert("Selecciona un paciente en la pestaña 'Pacientes' para asignarle esta evaluación."); onSectionChange('patients'); }} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg">Asignar a Paciente</button>
-                                            </div>
+                                        <div className="space-y-2">
+                                            {patientSurveys.filter(s => s.status === 'completed').map(s => (
+                                                <div key={s.id} className="flex justify-between items-center p-4 bg-slate-800/50 rounded-lg border border-slate-800 hover:border-brand-500/50 cursor-pointer group" onClick={() => setViewingAssignment(s)}>
+                                                    <div>
+                                                        <p className="text-white font-bold text-sm group-hover:text-brand-300 transition-colors">{s.templateTitle}</p>
+                                                        <p className="text-xs text-slate-500">{new Date(s.completedAt || 0).toLocaleDateString()}</p>
+                                                    </div>
+                                                    <button className="bg-slate-900 text-slate-400 hover:text-white px-3 py-1 rounded text-xs font-bold border border-slate-700">Ver Informe</button>
+                                                </div>
+                                            ))}
+                                            {patientSurveys.filter(s => s.status === 'completed').length === 0 && <p className="text-slate-500 italic text-center py-4">No hay evaluaciones completadas.</p>}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="mt-8"><div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold text-slate-200 flex items-center gap-2"><span className="w-1 h-6 bg-indigo-500 rounded-full"></span>Mis Plantillas</h2><button onClick={() => setIsBuilderMode(true)} className="text-indigo-400 hover:text-white text-sm font-bold flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"><span>+</span> Crear Nueva</button></div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {displayTemplates.length === 0 ? (
-                                            <div className="col-span-full py-8 text-center bg-slate-900/30 rounded-3xl border border-slate-800 border-dashed"><p className="text-slate-500 text-sm">No has creado plantillas personalizadas.</p></div>
-                                        ) : (
-                                            displayTemplates.map(t => (
-                                                <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-600 transition-all flex flex-col h-full">
-                                                    <h3 className="font-bold text-lg text-white mb-2">{t.title}</h3>
-                                                    <p className="text-slate-400 text-sm mb-4 flex-1 line-clamp-2">{t.description}</p>
-                                                    <div className="mt-auto space-y-2">
-                                                        <div className="flex items-center gap-2 text-xs text-slate-500 font-bold uppercase tracking-wider bg-slate-950/50 p-2 rounded-lg w-fit mb-2"><span>{t.questions.length} Preguntas</span></div>
-                                                        <button onClick={() => setViewingTemplate(t)} className="w-full bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded-lg hover:text-white transition-colors">Ver Preguntas</button>
-                                                    </div>
+                            )}
+
+                            {/* TAB 5: ADMINISTRATIVE (Finance & Reminders) */}
+                            {activeRecordTab === 'admin' && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Financials */}
+                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-lg font-bold text-white">Facturación</h3>
+                                            <button onClick={() => setIsAddingFinance(true)} className="text-emerald-400 text-xs font-bold border border-emerald-500/30 px-3 py-1 rounded hover:bg-emerald-500/10">+ Pago</button>
+                                        </div>
+
+                                        {isAddingFinance && (
+                                            <div className="bg-slate-950 p-3 rounded mb-4 animate-slide-up space-y-2">
+                                                <input className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" placeholder="Concepto" onChange={e => setFinanceForm({...financeForm, concept: e.target.value})} />
+                                                <div className="flex gap-2">
+                                                    <input type="number" className="w-1/3 bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" placeholder="Monto" onChange={e => setFinanceForm({...financeForm, amount: parseFloat(e.target.value)})} />
+                                                    <select className="w-1/3 bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" onChange={e => setFinanceForm({...financeForm, status: e.target.value as any})}>
+                                                        <option value="pending">Pendiente</option>
+                                                        <option value="paid">Pagado</option>
+                                                    </select>
+                                                    <select className="w-1/3 bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" onChange={e => setFinanceForm({...financeForm, method: e.target.value as any})}>
+                                                        <option value="card">Tarjeta</option>
+                                                        <option value="cash">Efectivo</option>
+                                                        <option value="transfer">Transf.</option>
+                                                    </select>
                                                 </div>
-                                            ))
+                                                <button onClick={addFinance} className="w-full bg-emerald-600 text-white text-xs font-bold py-2 rounded">Guardar Registro</button>
+                                            </div>
                                         )}
+
+                                        <div className="space-y-2">
+                                            {financials.map(f => (
+                                                <div key={f.id} className="flex justify-between items-center p-2 border-b border-slate-800 last:border-0">
+                                                    <div>
+                                                        <p className="text-white text-sm font-bold">{f.concept}</p>
+                                                        <p className="text-xs text-slate-500">{new Date(f.date).toLocaleDateString()} • {f.method === 'card' ? 'Tarjeta' : f.method === 'transfer' ? 'Transferencia' : 'Efectivo'}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-white font-mono">${f.amount}</p>
+                                                        <span className={`text-[10px] uppercase font-bold px-1 rounded ${f.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                                            {f.status === 'paid' ? 'Pagado' : 'Pendiente'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {financials.length === 0 && <p className="text-slate-500 italic text-xs">Sin registros financieros.</p>}
+                                        </div>
+                                    </div>
+
+                                    {/* Reminders */}
+                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-lg font-bold text-white">Recordatorios</h3>
+                                            <button onClick={() => setIsAddingReminder(true)} className="text-indigo-400 text-xs font-bold border border-indigo-500/30 px-3 py-1 rounded hover:bg-indigo-500/10">+ Añadir</button>
+                                        </div>
+                                        
+                                        {isAddingReminder && (
+                                             <div className="bg-slate-950 p-3 rounded mb-4 animate-slide-up space-y-2">
+                                                <input className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" placeholder="Tarea / Recordatorio" onChange={e => setReminderForm({...reminderForm, title: e.target.value})} />
+                                                <input type="datetime-local" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" onChange={e => setReminderForm({...reminderForm, date: e.target.value})} />
+                                                <div className="flex gap-2">
+                                                    <button onClick={addReminder} className="flex-1 bg-indigo-600 text-white text-xs font-bold py-2 rounded">Guardar</button>
+                                                    <button onClick={() => alert("Función de envío de notificación en desarrollo.")} className="flex-1 bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded border border-slate-700">Notificar al Paciente</button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-2">
+                                            {reminders.map(r => (
+                                                <div key={r.id} className="flex items-center gap-3 p-2 bg-slate-800/30 rounded border border-slate-800">
+                                                    <div className={`w-2 h-2 rounded-full ${r.isCompleted ? 'bg-emerald-500' : 'bg-indigo-500'}`}></div>
+                                                    <div className="flex-1">
+                                                        <p className={`text-sm ${r.isCompleted ? 'text-slate-500 line-through' : 'text-white'}`}>{r.title}</p>
+                                                        <p className="text-xs text-slate-500">{new Date(r.date).toLocaleString()}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                             {reminders.length === 0 && <p className="text-slate-500 italic text-xs">Sin recordatorios pendientes.</p>}
+                                        </div>
                                     </div>
                                 </div>
-                            </>
-                        ) : (
-                             // Builder UI
-                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-4xl mx-auto shadow-2xl animate-slide-up">
-                                <div className="flex justify-between items-center mb-8 pb-6 border-b border-slate-800">
-                                    <h2 className="text-2xl font-bold text-slate-200">Nueva Plantilla</h2>
-                                    <button onClick={() => setIsBuilderMode(false)} className="text-slate-500 hover:text-white flex items-center gap-2 text-sm font-bold">Cancelar</button>
-                                </div>
+                            )}
 
-                                <div className="mb-8">
-                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Título de la Evaluación</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full bg-slate-800 text-white p-4 rounded-xl border border-slate-700 outline-none focus:border-brand-500 transition-colors" 
-                                        value={newTemplateTitle} 
-                                        onChange={(e) => setNewTemplateTitle(e.target.value)}
-                                        placeholder="Ej. Registro de Ansiedad Semanal"
-                                    />
-                                </div>
-
-                                <div className="space-y-6 mb-8">
-                                    {questions.map((q, idx) => (
-                                        <div key={q.id} className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800 relative group">
-                                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                 <button onClick={() => setQuestions(questions.filter(qi => qi.id !== q.id))} className="text-slate-600 hover:text-red-400">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                 </button>
-                                            </div>
-                                            <div className="flex items-center gap-3 mb-4">
-                                                <span className="bg-slate-800 text-slate-400 text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">
-                                                    {q.type === 'scale' ? 'Escala 1-10' : q.type === 'multiple_choice' ? 'Opción Múltiple' : 'Texto Libre'}
-                                                </span>
-                                                <span className="text-slate-600 text-xs font-bold">Pregunta {idx + 1}</span>
-                                            </div>
-                                            <input 
-                                                className="w-full bg-transparent text-white text-lg font-medium outline-none border-b border-slate-700 focus:border-brand-500 pb-2 mb-4 placeholder-slate-600"
-                                                placeholder="Escribe la pregunta aquí..."
-                                                value={q.text}
-                                                onChange={(e) => updateQuestionText(q.id, e.target.value)}
-                                            />
-                                            
-                                            {q.type === 'multiple_choice' && q.options && (
-                                                <div className="space-y-3 pl-4 border-l-2 border-slate-800">
-                                                    {q.options.map((opt, optIdx) => (
-                                                        <div key={optIdx} className="flex items-center gap-2">
-                                                            <div className="w-3 h-3 rounded-full border border-slate-600"></div>
-                                                            <input 
-                                                                className="bg-transparent text-slate-300 text-sm outline-none w-full"
-                                                                value={opt}
-                                                                onChange={(e) => updateOptionText(q.id, optIdx, e.target.value)}
-                                                                placeholder={`Opción ${optIdx + 1}`}
-                                                            />
-                                                            <button onClick={() => removeOption(q.id, optIdx)} className="text-slate-600 hover:text-slate-400 px-2">×</button>
-                                                        </div>
-                                                    ))}
-                                                    <button onClick={() => addOption(q.id)} className="text-xs font-bold text-brand-500 hover:text-brand-400 mt-2">+ Añadir Opción</button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-
-                                    {questions.length === 0 && (
-                                        <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl text-slate-600">
-                                            Empieza añadiendo preguntas a tu plantilla.
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex flex-wrap gap-3 mb-8 justify-center border-t border-b border-slate-800 py-6">
-                                    <button onClick={() => addQuestion('scale')} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
-                                        <span>📊</span> Escala Numérica
-                                    </button>
-                                    <button onClick={() => addQuestion('multiple_choice')} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
-                                        <span>☑️</span> Opción Múltiple
-                                    </button>
-                                    <button onClick={() => addQuestion('text')} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
-                                        <span>✍️</span> Texto Libre
-                                    </button>
-                                </div>
-
-                                <div className="flex justify-end">
-                                    <button 
-                                        onClick={saveTemplate} 
-                                        disabled={!newTemplateTitle || questions.length === 0}
-                                        className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-all"
-                                    >
-                                        Guardar Plantilla
-                                    </button>
-                                </div>
-                            </div>
-                        )
-                    )}
-                </div>
-            )}
-
-            {/* PATIENT DETAILS MODAL WITH RESOURCE ASSIGNMENT - PORTALED */}
-            {isViewingPatientDetails && selectedPatientId && createPortal(
-                <div 
-                    className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-                    onClick={() => setIsViewingPatientDetails(false)}
-                >
-                    <div 
-                        className="bg-slate-900 w-full max-w-6xl h-[90vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scale-in"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Header */}
-                        <div className="bg-slate-900 p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-                             <div>
-                                 <h2 className="text-2xl font-bold text-white">{getPatientName(selectedPatientId)}</h2>
-                                 <p className="text-xs text-slate-500 font-medium">Dashboard Clínico</p>
-                             </div>
-                             <button onClick={() => setIsViewingPatientDetails(false)} className="text-slate-500 hover:text-white bg-slate-800 p-2 rounded-full hover:bg-slate-700 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                             </button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 bg-slate-950/50">
-                             
-                             {/* --- CLINICAL DASHBOARD STATS --- */}
-                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <StatCard 
-                                    title="Informes Enviados" 
-                                    value={selectedPatientReports.length} 
-                                    icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-                                    colorClass="bg-indigo-500/20 text-indigo-400"
-                                />
-                                <StatCard 
-                                    title="Balance Emocional" 
-                                    value={`${modalStats.naretboxBalance}%`} 
-                                    subtitle="Positividad media"
-                                    icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                                    colorClass={modalStats.naretboxBalance > 50 ? "bg-emerald-500/20 text-emerald-400" : "bg-orange-500/20 text-orange-400"}
-                                />
-                                <StatCard 
-                                    title="Adherencia Tareas" 
-                                    value={`${modalStats.adherenceRate}%`} 
-                                    subtitle={`${modalStats.completedTasks} completadas / ${modalStats.completedTasks + modalStats.pendingTasks} totales`}
-                                    icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
-                                    colorClass="bg-brand-500/20 text-brand-400"
-                                />
-                                <StatCard 
-                                    title="Estado Reciente" 
-                                    value={modalStats.latestClinical ? (modalStats.latestClinical.hasSuicidalRisk ? "RIESGO" : "Seguimiento") : "Sin datos"}
-                                    icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
-                                    colorClass={modalStats.latestClinical?.hasSuicidalRisk ? "bg-red-500/20 text-red-500" : "bg-slate-700/50 text-slate-400"}
-                                />
-                             </div>
-
-                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                {/* Chart Section */}
-                                <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-6">Evolución Emocional (Últimos 7 informes)</h3>
-                                    {modalStats.chartData.length > 0 ? (
-                                        <div className="h-64 w-full">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={modalStats.chartData}>
-                                                    <XAxis dataKey="date" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                                    <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                                    <RechartsTooltip 
-                                                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                                        itemStyle={{ color: '#fff' }}
-                                                        cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                                                    />
-                                                    <Bar dataKey="Positivo" fill="#10b981" radius={[4, 4, 0, 0]} stackId="a" />
-                                                    <Bar dataKey="Negativo" fill="#475569" radius={[4, 4, 0, 0]} stackId="a" />
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    ) : (
-                                        <div className="h-64 flex items-center justify-center text-slate-500 text-sm italic border border-dashed border-slate-800 rounded-xl">
-                                            No hay suficientes datos de Naretbox.
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Clinical Snapshot */}
-                                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col">
-                                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-6">Última Evaluación Clínica</h3>
-                                    {modalStats.latestClinical ? (
-                                        <div className="space-y-6 my-auto">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className="text-white font-bold">{modalStats.latestClinical.type === 'Initial' ? 'Evaluación Inicial' : 'BDI-II'}</span>
-                                                <span className={`text-xs px-2 py-1 rounded font-bold ${modalStats.latestClinical.color.replace('text-', 'bg-').replace('500', '500/20 text-white')}`}>
-                                                    {modalStats.latestClinical.level || modalStats.latestClinical.score}
-                                                </span>
-                                            </div>
-                                            
-                                            {modalStats.latestClinical.type === 'Initial' ? (
-                                                <div className="space-y-4">
-                                                    <div>
-                                                        <div className="flex justify-between text-xs mb-1 text-slate-400"><span>Depresión</span><span>{modalStats.latestClinical.depression.level}</span></div>
-                                                        <div className="h-1.5 bg-slate-800 rounded-full"><div className={`h-1.5 rounded-full ${modalStats.latestClinical.depression.color.replace('text-', 'bg-')}`} style={{width: `${(modalStats.latestClinical.depression.rawScore/15)*100}%`}}></div></div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex justify-between text-xs mb-1 text-slate-400"><span>Ansiedad</span><span>{modalStats.latestClinical.anxiety.level}</span></div>
-                                                        <div className="h-1.5 bg-slate-800 rounded-full"><div className={`h-1.5 rounded-full ${modalStats.latestClinical.anxiety.color.replace('text-', 'bg-')}`} style={{width: `${(modalStats.latestClinical.anxiety.rawScore/15)*100}%`}}></div></div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex justify-between text-xs mb-1 text-slate-400"><span>Estrés</span><span>{modalStats.latestClinical.stress.level}</span></div>
-                                                        <div className="h-1.5 bg-slate-800 rounded-full"><div className={`h-1.5 rounded-full ${modalStats.latestClinical.stress.color.replace('text-', 'bg-')}`} style={{width: `${(modalStats.latestClinical.stress.rawScore/12)*100}%`}}></div></div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="text-center py-4">
-                                                    <p className="text-4xl font-bold text-white mb-1">{modalStats.latestClinical.score}</p>
-                                                    <p className={`text-sm font-bold ${modalStats.latestClinical.color}`}>{modalStats.latestClinical.level}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 flex items-center justify-center text-slate-500 text-sm italic text-center p-4">
-                                            El paciente no ha completado ninguna evaluación clínica estándar aún.
-                                        </div>
-                                    )}
-                                </div>
-                             </div>
-
-                             {/* --- MANAGEMENT SECTION --- */}
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Assign Survey */}
-                                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                     <h3 className="text-slate-400 text-xs font-bold uppercase mb-4">Asignar Tarea / Encuesta</h3>
-                                     <select className="w-full bg-slate-950 text-white p-2 rounded-lg border border-slate-700 mb-3" onChange={(e) => setSelectedTemplateId(e.target.value)} value={selectedTemplateId}>
-                                            <option value="">Seleccionar Plantilla...</option>
-                                            <option value={INITIAL_MENTAL_HEALTH_ASSESSMENT.id}>{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</option>
-                                            <option value={BDI_II_ASSESSMENT.id}>{BDI_II_ASSESSMENT.title}</option>
-                                            {displayTemplates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                                     </select>
-                                     <button onClick={handleAssign} className="w-full bg-brand-500 text-white py-2 rounded-lg text-sm font-bold">Enviar Tarea</button>
-                                </div>
-                                {/* Assign Resource */}
-                                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                     <h3 className="text-slate-400 text-xs font-bold uppercase mb-4">Enviar Recurso Educativo</h3>
-                                     <select className="w-full bg-slate-950 text-white p-2 rounded-lg border border-slate-700 mb-3" onChange={(e) => setSelectedResourceId(e.target.value)} value={selectedResourceId}>
-                                            <option value="">Seleccionar Recurso...</option>
-                                            {resources.map(r => <option key={r.id} value={r.id}>{r.title} ({r.type})</option>)}
-                                     </select>
-                                     <button onClick={handleAssignResource} className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold">Enviar Recurso</button>
-                                     {assignMsg && <p className="text-xs text-emerald-400 mt-2">{assignMsg}</p>}
-                                </div>
-                             </div>
-
-                             {/* Patient History */}
-                             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                <h3 className="text-slate-400 text-xs font-bold uppercase mb-6">Historial Clínico</h3>
-                                <div className="space-y-4">
-                                    {patientHistory.length === 0 ? (
-                                        <div className="text-center text-slate-500 text-sm py-4">Sin historial registrado.</div>
-                                    ) : (
-                                        patientHistory.map((item: any, idx) => (
-                                            <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center ${item.type === 'survey' ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-slate-800/50 border-slate-700'}`}>
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`p-2 rounded-lg ${item.type === 'survey' ? 'bg-indigo-500 text-white' : 'bg-emerald-500 text-white'}`}>
-                                                        {item.type === 'survey' ? (
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /></svg>
-                                                        ) : (
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
-                                                        )}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-white text-sm">{item.type === 'survey' ? item.templateTitle : 'Informe Naretbox'}</p>
-                                                        <p className="text-xs text-slate-400">{new Date(item.date).toLocaleDateString()}</p>
-                                                    </div>
-                                                </div>
-                                                <button 
-                                                    onClick={() => {
-                                                        if(item.type === 'survey') setViewingAssignment(item as SurveyAssignment);
-                                                        else setSelectedReport(item as PatientReport);
-                                                    }}
-                                                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors"
-                                                >
-                                                    Ver
-                                                </button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                             </div>
                         </div>
                     </div>
                 </div>,
@@ -736,7 +909,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             {/* Modal for Survey Results - PORTALED */}
             {viewingAssignment && createPortal(
                 <div 
-                    className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
+                    className="fixed top-0 left-0 w-screen h-screen z-[250] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
                     onClick={() => setViewingAssignment(null)}
                 >
                     <div 
@@ -751,7 +924,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             <button onClick={() => setViewingAssignment(null)} className="text-slate-400 hover:text-white">✕</button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6">
-                            <SurveyResultView assignment={viewingAssignment} />
+                            <SurveyResultView assignment={viewingAssignment} templates={templates} />
                         </div>
                     </div>
                 </div>,
@@ -761,7 +934,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             {/* Modal for Template PREVIEW - PORTALED */}
             {viewingTemplate && createPortal(
                 <div 
-                    className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
+                    className="fixed top-0 left-0 w-screen h-screen z-[250] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
                     onClick={() => setViewingTemplate(null)}
                 >
                     <div 
@@ -809,7 +982,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             {/* Modal for Patient Report - PORTALED */}
             {selectedReport && createPortal(
                 <div 
-                    className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
+                    className="fixed top-0 left-0 w-screen h-screen z-[250] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
                     onClick={() => setSelectedReport(null)}
                 >
                     <div 
@@ -850,4 +1023,3 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 };
 
 export default PsychologistDashboard;
-
