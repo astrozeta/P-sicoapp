@@ -505,13 +505,13 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     const getPatientName = (id: string) => { const p = patients.find(pat => pat.id === id); return p ? `${p.name} ${p.surnames || ''}` : 'Usuario desconocido'; };
     const displayTemplates = templates.filter(t => t.id !== INITIAL_MENTAL_HEALTH_ASSESSMENT.id && t.id !== BDI_II_ASSESSMENT.id);
 
-    // Patient Detail Tab Configuration
+    // Explicit Spanish Tabs Configuration
     const patientDetailTabs = [
-        { id: 'general', label: 'General', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
-        { id: 'clinical', label: 'Clínico', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
-        { id: 'treatment', label: 'Tratamiento', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
-        { id: 'evaluations', label: 'Evaluaciones', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg> },
-        { id: 'admin', label: 'Admin', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
+        { id: 'general', label: '1. General', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
+        { id: 'clinical', label: '2. Clínico', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
+        { id: 'treatment', label: '3. Tratamiento', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+        { id: 'evaluations', label: '4. Evaluaciones', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg> },
+        { id: 'admin', label: '5. Admin', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
     ];
 
     return (
@@ -1102,9 +1102,9 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             <div className="space-y-8">
                                 {/* Charts Row - Fixed Heights for Containers */}
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col h-80">
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col" style={{ height: '400px' }}>
                                         <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Balance Emocional (Últimos 7 días)</h4>
-                                        <div className="flex-1 min-h-0 w-full">
+                                        <div className="flex-1 min-h-0 w-full relative">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <BarChart data={modalStats.naretData}>
                                                     <XAxis dataKey="date" stroke="#64748b" fontSize={10} />
@@ -1117,9 +1117,9 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                                             </ResponsiveContainer>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col h-80">
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col" style={{ height: '400px' }}>
                                         <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Evolución BDI-II</h4>
-                                        <div className="flex-1 min-h-0 w-full">
+                                        <div className="flex-1 min-h-0 w-full relative">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <LineChart data={modalStats.bdiData}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
