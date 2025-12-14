@@ -491,6 +491,17 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
     const activeTasks = useMemo(() => patientSurveys.filter(s => s.status === 'pending'), [patientSurveys]);
 
+    // Filter appointments for Today
+    const todaysAppointments = useMemo(() => {
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const endOfDay = startOfDay + 86400000;
+
+        return appointments
+            .filter(a => a.startTime >= startOfDay && a.startTime < endOfDay)
+            .sort((a, b) => a.startTime - b.startTime);
+    }, [appointments]);
+
     const getPatientName = (id: string) => { const p = patients.find(pat => pat.id === id); return p ? `${p.name} ${p.surnames || ''}` : 'Usuario desconocido'; };
     const displayTemplates = templates.filter(t => t.id !== INITIAL_MENTAL_HEALTH_ASSESSMENT.id && t.id !== BDI_II_ASSESSMENT.id);
 
@@ -520,37 +531,106 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             colorClass="bg-emerald-500/20 text-emerald-400"
                         />
                     </div>
+
+                    {/* TODAY'S AGENDA WIDGET */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                Agenda de Hoy
+                            </h3>
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
+                                {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+                            </span>
+                        </div>
+
+                        {todaysAppointments.length === 0 ? (
+                            <div className="text-center py-10 border border-dashed border-slate-800 rounded-xl bg-slate-950/30">
+                                <div className="inline-flex p-3 rounded-full bg-slate-800/50 mb-3 text-slate-500">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                                <p className="text-slate-400 font-medium">Todo despejado.</p>
+                                <p className="text-xs text-slate-500 mt-1">No tienes citas programadas para hoy.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {todaysAppointments.map(appt => (
+                                    <div key={appt.id} className="flex items-center gap-4 p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/30 transition-all group">
+                                        <div className="text-center px-4 border-r border-slate-800 min-w-[80px]">
+                                            <p className="text-white font-mono font-bold text-lg">{new Date(appt.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-white font-bold text-sm truncate">
+                                                {appt.status === 'blocked' ? 'Tiempo Bloqueado' : getPatientName(appt.patientId || '')}
+                                            </p>
+                                            <p className="text-xs text-slate-500 flex items-center gap-1">
+                                                {appt.status === 'blocked' ? 'No disponible' : 'Consulta General'}
+                                                {appt.meetLink && appt.status !== 'blocked' && (
+                                                    <a href={appt.meetLink} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline ml-2 font-bold flex items-center gap-1">
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                        Video
+                                                    </a>
+                                                )}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${appt.status === 'blocked' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'}`}>
+                                                {appt.status === 'blocked' ? 'Bloqueado' : 'Confirmada'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
             {/* PATIENTS TAB */}
             {activeSection === 'patients' && (
-                <div className="space-y-6 animate-fade-in">
-                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <h2 className="text-xl font-bold text-slate-200">Listado</h2>
-                         <div className="flex gap-3 w-full md:w-auto">
-                            <input type="text" value={patientSearchTerm} onChange={(e) => setPatientSearchTerm(e.target.value)} placeholder="Buscar por nombre..." className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white outline-none"/>
-                            <button onClick={() => setIsCreatingPatient(true)} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-xl font-bold text-sm">Nuevo Paciente</button>
-                        </div>
+                <div className="animate-slide-up">
+                    <div className="flex justify-between mb-6">
+                        <input 
+                             type="text" 
+                             placeholder="Buscar paciente..." 
+                             className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 w-full max-w-md"
+                             value={patientSearchTerm}
+                             onChange={e => setPatientSearchTerm(e.target.value)}
+                        />
+                        <button 
+                             onClick={() => setIsCreatingPatient(true)}
+                             className="bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 px-6 rounded-xl transition-colors flex items-center gap-2"
+                        >
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                 <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                             </svg>
+                             Nuevo Paciente
+                        </button>
                     </div>
-                    {isCreatingPatient && (
-                        <div className="p-6 bg-slate-900 border border-slate-700 rounded-3xl mb-6">
-                            <form onSubmit={handleCreatePatient} className="grid grid-cols-2 gap-4">
-                                <input className="bg-slate-800 p-2 text-white rounded" placeholder="Nombre" value={pName} onChange={e => setPName(e.target.value)} required />
-                                <input className="bg-slate-800 p-2 text-white rounded" placeholder="Email" value={pEmail} onChange={e => setPEmail(e.target.value)} required />
-                                <input className="bg-slate-800 p-2 text-white rounded" placeholder="Password" value={pPassword} onChange={e => setPPassword(e.target.value)} required />
-                                <button type="submit" className="bg-brand-500 text-white rounded p-2">Crear</button>
-                            </form>
-                        </div>
-                    )}
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {patients.filter(p => p.name.toLowerCase().includes(patientSearchTerm.toLowerCase())).map(p => (
-                            <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-brand-500/50 transition-all cursor-pointer" onClick={() => { setSelectedPatientId(p.id); setIsViewingPatientDetails(true); }}>
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-500">{p.name.charAt(0)}</div>
-                                    <div><h3 className="font-bold text-white">{p.name} {p.surnames}</h3><p className="text-sm text-slate-400">{p.email}</p></div>
-                                </div>
-                                <div className="text-xs text-brand-400 font-bold uppercase tracking-wider">Ver Expediente Clínico &rarr;</div>
+                        {patients.filter(p => p.name.toLowerCase().includes(patientSearchTerm.toLowerCase())).map(patient => (
+                            <div key={patient.id} onClick={() => { setSelectedPatientId(patient.id); setIsViewingPatientDetails(true); }} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-indigo-500 transition-colors group">
+                                 <div className="flex items-center gap-4 mb-4">
+                                     <div className="w-12 h-12 bg-indigo-500/20 rounded-full flex items-center justify-center text-indigo-400 font-bold text-lg group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                                         {patient.name.charAt(0)}
+                                     </div>
+                                     <div>
+                                         <h3 className="text-lg font-bold text-white group-hover:text-indigo-400 transition-colors">{patient.name} {patient.surnames}</h3>
+                                         <p className="text-sm text-slate-500">{patient.email}</p>
+                                     </div>
+                                 </div>
+                                 <div className="flex justify-between items-center text-xs text-slate-400 border-t border-slate-800 pt-4">
+                                     <span>ID: {patient.id.slice(0,6)}...</span>
+                                     <span className="flex items-center gap-1 text-emerald-500">
+                                         <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                                         Activo
+                                     </span>
+                                 </div>
                             </div>
                         ))}
                     </div>
@@ -559,240 +639,62 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
             {/* TOOLS TAB */}
             {activeSection === 'tools' && (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="flex gap-4 border-b border-slate-800">
-                        <button onClick={() => setToolSubTab('surveys')} className={`pb-3 px-2 font-bold ${toolSubTab === 'surveys' ? 'text-brand-500 border-b-2 border-brand-500' : 'text-slate-500'}`}>Encuestas y Tests</button>
-                        <button onClick={() => setToolSubTab('resources')} className={`pb-3 px-2 font-bold ${toolSubTab === 'resources' ? 'text-brand-500 border-b-2 border-brand-500' : 'text-slate-500'}`}>Recursos Educativos</button>
+                <div className="animate-slide-up">
+                    <div className="flex space-x-4 mb-8 border-b border-slate-800 pb-2">
+                        <button 
+                            onClick={() => setToolSubTab('surveys')}
+                            className={`px-4 py-2 text-sm font-bold uppercase transition-colors ${toolSubTab === 'surveys' ? 'text-brand-500 border-b-2 border-brand-500' : 'text-slate-500 hover:text-white'}`}
+                        >
+                            Encuestas
+                        </button>
+                        <button 
+                            onClick={() => setToolSubTab('resources')}
+                            className={`px-4 py-2 text-sm font-bold uppercase transition-colors ${toolSubTab === 'resources' ? 'text-brand-500 border-b-2 border-brand-500' : 'text-slate-500 hover:text-white'}`}
+                        >
+                            Recursos Educativos
+                        </button>
                     </div>
 
                     {toolSubTab === 'surveys' && (
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-white">Mis Plantillas</h3>
-                                <button onClick={() => setIsBuilderMode(true)} className="bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-bold">Crear Nueva</button>
-                            </div>
-
-                            {/* Builder UI */}
-                            {isBuilderMode && (
-                                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-                                    <input className="w-full bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" placeholder="Título de la Encuesta" value={newTemplateTitle} onChange={e => setNewTemplateTitle(e.target.value)} />
-                                    
-                                    <div className="space-y-2">
-                                        {questions.map((q, idx) => (
-                                            <div key={idx} className="bg-slate-950 p-3 rounded border border-slate-800 flex justify-between items-center">
-                                                <span className="text-white text-sm">{idx + 1}. {q.text}</span>
-                                                <span className="text-xs text-slate-500 uppercase">{q.type}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-800">
-                                        <button onClick={() => {
-                                            const text = prompt("Texto de la pregunta:");
-                                            if(text) setQuestions([...questions, { id: crypto.randomUUID(), type: 'text', text }]);
-                                        }} className="bg-slate-800 p-2 rounded text-slate-300 text-sm hover:text-white">Añadir Texto Libre</button>
-                                        <button onClick={() => {
-                                            const text = prompt("Texto de la pregunta (1-10):");
-                                            if(text) setQuestions([...questions, { id: crypto.randomUUID(), type: 'scale', text }]);
-                                        }} className="bg-slate-800 p-2 rounded text-slate-300 text-sm hover:text-white">Añadir Escala 1-10</button>
-                                    </div>
-
-                                    <div className="flex justify-end gap-2 mt-4">
-                                        <button onClick={() => setIsBuilderMode(false)} className="text-slate-500 px-4">Cancelar</button>
-                                        <button onClick={handleCreateTemplate} className="bg-emerald-500 text-white px-4 py-2 rounded font-bold">Guardar Plantilla</button>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl opacity-75">
-                                    <h4 className="font-bold text-white mb-1">{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</h4>
-                                    <p className="text-xs text-slate-500">Sistema (Solo lectura)</p>
-                                </div>
-                                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl opacity-75">
-                                    <h4 className="font-bold text-white mb-1">{BDI_II_ASSESSMENT.title}</h4>
-                                    <p className="text-xs text-slate-500">Sistema (Solo lectura)</p>
-                                </div>
-                                {displayTemplates.map(t => (
-                                    <div key={t.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center group cursor-pointer hover:border-brand-500/50" onClick={() => setViewingTemplate(t)}>
-                                        <div>
-                                            <h4 className="font-bold text-white mb-1">{t.title}</h4>
-                                            <p className="text-xs text-slate-500">{t.questions.length} preguntas</p>
-                                        </div>
-                                        <span className="text-brand-400 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">Ver &rarr;</span>
-                                    </div>
-                                ))}
-                            </div>
+                        <div>
+                             <div className="flex justify-between mb-6">
+                                <h2 className="text-xl font-bold text-white">Plantillas Disponibles</h2>
+                                <button onClick={() => setIsBuilderMode(true)} className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-700">Crear Nueva</button>
+                             </div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                 {[INITIAL_MENTAL_HEALTH_ASSESSMENT, BDI_II_ASSESSMENT, ...displayTemplates].map(t => (
+                                     <div key={t.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                         <div className="flex justify-between items-start">
+                                            <h3 className="font-bold text-white">{t.title}</h3>
+                                            {t.id === INITIAL_MENTAL_HEALTH_ASSESSMENT.id || t.id === BDI_II_ASSESSMENT.id ? (
+                                                <span className="bg-indigo-500/20 text-indigo-400 text-[10px] px-2 py-1 rounded uppercase">Estándar</span>
+                                            ) : (
+                                                <span className="bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded uppercase">Personalizada</span>
+                                            )}
+                                         </div>
+                                         <p className="text-sm text-slate-500 mt-2 mb-4 line-clamp-2">{t.description}</p>
+                                         <p className="text-xs text-slate-600">{t.questions.length} preguntas</p>
+                                     </div>
+                                 ))}
+                             </div>
                         </div>
                     )}
 
                     {toolSubTab === 'resources' && (
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-white">Biblioteca de Recursos</h3>
-                                <button onClick={() => setIsResourceMode(true)} className="bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-bold">Añadir Recurso</button>
+                        <div>
+                            <div className="flex justify-between mb-6">
+                                <h2 className="text-xl font-bold text-white">Biblioteca de Recursos</h2>
+                                <button onClick={() => setIsResourceMode(true)} className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-700">Añadir Recurso</button>
                             </div>
-
-                            {/* Resource Builder */}
-                            {isResourceMode && (
-                                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-                                    <input className="w-full bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" placeholder="Título" value={resTitle} onChange={e => setResTitle(e.target.value)} />
-                                    <textarea className="w-full bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" placeholder="Descripción breve" value={resDesc} onChange={e => setResDesc(e.target.value)} />
-                                    <div className="flex gap-2">
-                                        <select className="bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" value={resType} onChange={e => setResType(e.target.value as any)}>
-                                            <option value="image">Imagen</option>
-                                            <option value="pdf">PDF</option>
-                                            <option value="video">Video</option>
-                                            <option value="link">Enlace</option>
-                                        </select>
-                                        <input className="flex-1 bg-slate-800 border border-slate-700 p-3 rounded-lg text-white" placeholder="URL del recurso" value={resUrl} onChange={e => setResUrl(e.target.value)} />
-                                    </div>
-                                    <div className="flex justify-end gap-2 mt-4">
-                                        <button onClick={() => setIsResourceMode(false)} className="text-slate-500 px-4">Cancelar</button>
-                                        <button onClick={handleCreateResource} className="bg-emerald-500 text-white px-4 py-2 rounded font-bold">Guardar</button>
-                                    </div>
-                                </div>
-                            )}
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {resources.map(r => (
-                                    <div key={r.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                                        <div className="flex justify-between items-start">
-                                            <h4 className="font-bold text-white text-sm">{r.title}</h4>
-                                            <span className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-400 uppercase">{r.type}</span>
+                                    <div key={r.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex gap-4">
+                                        <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center text-2xl">
+                                            {r.type === 'pdf' ? '📄' : r.type === 'video' ? '🎥' : r.type === 'image' ? '🖼️' : '🔗'}
                                         </div>
-                                        <p className="text-xs text-slate-500 mt-2 line-clamp-2">{r.description}</p>
-                                        <a href={r.url} target="_blank" rel="noreferrer" className="text-indigo-400 text-xs mt-3 block hover:underline truncate">{r.url}</a>
-                                    </div>
-                                ))}
-                                {resources.length === 0 && <p className="text-slate-500 italic">No hay recursos creados.</p>}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* SCHEDULE TAB (Weekly Calendar) */}
-            {activeSection === 'schedule' && (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="flex justify-between items-center mb-4">
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h2 className="text-xl font-bold text-slate-200">Agenda Semanal</h2>
-                                <span className="bg-brand-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Nuevo Visual</span>
-                            </div>
-                            <p className="text-xs text-slate-500">Gestión visual de citas y bloqueos.</p>
-                        </div>
-                        
-                        <div className="flex gap-4">
-                            <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800">
-                                <button onClick={() => setScheduleViewType('calendar')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${scheduleViewType === 'calendar' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Grilla</button>
-                                <button onClick={() => setScheduleViewType('list')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${scheduleViewType === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Lista</button>
-                            </div>
-
-                            <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800">
-                                <button onClick={handlePrevWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                                </button>
-                                <span className="px-4 text-sm font-bold text-white min-w-[150px] text-center">
-                                    {currentWeekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(currentWeekStart.getTime() + 4 * 86400000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                </span>
-                                <button onClick={handleNextWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {scheduleViewType === 'list' ? (
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                            <p className="text-slate-500 mb-4 text-sm">Vista simplificada de listado.</p>
-                            {appointments.length === 0 ? <p className="text-slate-500 italic">No hay citas registradas.</p> : (
-                                <ul className="space-y-2">
-                                    {appointments.map(a => (
-                                        <li key={a.id} className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center">
-                                            <div>
-                                                <p className="text-white font-bold">{new Date(a.startTime).toLocaleString()}</p>
-                                                <p className="text-xs text-slate-500">{a.status === 'blocked' ? 'Bloqueado' : getPatientName(a.patientId || '')}</p>
-                                            </div>
-                                            <button onClick={() => deleteAppointmentSlot(a.id).then(() => fetchGlobalData())} className="text-red-400 text-xs border border-red-500/30 px-2 py-1 rounded">Eliminar</button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl overflow-x-auto">
-                            <div className="min-w-[800px]">
-                                {/* SAFE LAYOUT: Flex Rows for Time Header */}
-                                <div className="flex border-b border-slate-800 bg-slate-950/50">
-                                    <div className="w-20 shrink-0 p-4 border-r border-slate-800 flex items-center justify-center text-xs font-bold text-slate-500">
-                                        HORA
-                                    </div>
-                                    <div className="flex-1 grid grid-cols-5 divide-x divide-slate-800">
-                                        {weekDays.map((day, i) => {
-                                            const isToday = new Date().toDateString() === day.toDateString();
-                                            return (
-                                                <div key={i} className={`p-4 text-center ${isToday ? 'bg-indigo-900/10' : ''}`}>
-                                                    <p className={`text-sm font-bold uppercase ${isToday ? 'text-indigo-400' : 'text-white'}`}>{day.toLocaleDateString('es-ES', { weekday: 'short' })}</p>
-                                                    <p className={`text-xs ${isToday ? 'text-indigo-300' : 'text-slate-500'}`}>{day.getDate()}</p>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Calendar Body using Flex Rows to guarantee alignment */}
-                                {[9, 10, 11, 12, 13, 14, 15, 16, 17].map(hour => (
-                                    <div key={hour} className="flex border-b border-slate-800 last:border-0 h-24 hover:bg-slate-800/20 transition-colors">
-                                        {/* Time Label */}
-                                        <div className="w-20 shrink-0 border-r border-slate-800 p-2 text-center text-xs text-slate-500 font-mono flex items-start justify-center pt-3">
-                                            {hour}:00
-                                        </div>
-                                        
-                                        {/* Days Cells Grid */}
-                                        <div className="flex-1 grid grid-cols-5 divide-x divide-slate-800">
-                                            {weekDays.map((day, i) => {
-                                                // Find appointment logic
-                                                const cellTime = new Date(day);
-                                                cellTime.setHours(hour, 0, 0, 0);
-                                                const cellTimestamp = cellTime.getTime();
-                                                const existingAppt = appointments.find(a => {
-                                                    const start = a.startTime;
-                                                    return Math.abs(start - cellTimestamp) < 60000; // Match within minute
-                                                });
-                                                
-                                                const isToday = new Date().toDateString() === day.toDateString();
-
-                                                return (
-                                                    <div 
-                                                        key={i} 
-                                                        className={`p-1 relative group cursor-pointer transition-colors ${isToday ? 'bg-indigo-900/5' : ''} ${!existingAppt ? 'hover:bg-slate-800/40' : ''}`}
-                                                        onClick={() => handleSlotClick(cellTime, existingAppt)}
-                                                    >
-                                                        {existingAppt ? (
-                                                            <div className={`
-                                                                w-full h-full rounded-lg p-2 text-xs flex flex-col justify-between shadow-lg border animate-scale-in
-                                                                ${existingAppt.status === 'blocked' 
-                                                                    ? 'bg-slate-800 border-slate-600 opacity-80' 
-                                                                    : 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500'
-                                                                }
-                                                            `}>
-                                                                <div className="font-bold text-white truncate">
-                                                                    {existingAppt.status === 'blocked' ? 'BLOQUEADO' : getPatientName(existingAppt.patientId || '')}
-                                                                </div>
-                                                                <div className="text-[10px] opacity-80 truncate">
-                                                                    {existingAppt.status === 'blocked' ? 'No disponible' : 'Ver detalles'}
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                                                <span className="text-xs font-bold text-slate-500 bg-slate-900 px-2 py-1 rounded border border-slate-700">+ Bloquear</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
+                                        <div className="flex-1">
+                                            <h3 className="font-bold text-white">{r.title}</h3>
+                                            <a href={r.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-400 hover:underline break-all block mt-1">{r.url}</a>
                                         </div>
                                     </div>
                                 ))}
@@ -804,589 +706,509 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
             {/* REVIEW TAB */}
             {activeSection === 'review' && (
-                <div className="space-y-8 animate-fade-in">
-                    <h2 className="text-xl font-bold text-slate-200">Revisión General</h2>
-                    
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                        <h3 className="text-lg font-bold text-white mb-6">Actividad Reciente</h3>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-slate-300 text-sm">
-                                <thead className="bg-slate-950/50 text-slate-500 text-xs uppercase">
-                                    <tr>
-                                        <th className="px-4 py-3">Paciente</th>
-                                        <th className="px-4 py-3">Actividad</th>
-                                        <th className="px-4 py-3">Fecha</th>
-                                        <th className="px-4 py-3 text-right">Detalle</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-800">
-                                    {assignments.filter(a => a.status === 'completed').slice(0, 10).map(a => (
-                                        <tr key={a.id} className="hover:bg-slate-800/30">
-                                            <td className="px-4 py-3 font-bold text-white">{getPatientName(a.patientId)}</td>
-                                            <td className="px-4 py-3">{a.templateTitle}</td>
-                                            <td className="px-4 py-3 text-slate-500">{new Date(a.completedAt || 0).toLocaleDateString()}</td>
-                                            <td className="px-4 py-3 text-right">
-                                                <button onClick={() => setViewingAssignment(a)} className="text-brand-400 hover:text-brand-300 font-bold text-xs">Ver Resultados</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {assignments.filter(a => a.status === 'completed').length === 0 && (
-                                        <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500 italic">No hay actividad reciente.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
+                <div className="animate-slide-up">
+                    <h2 className="text-xl font-bold text-white mb-6">Últimos Reportes</h2>
+                    <div className="space-y-4">
+                        {allReports.length === 0 ? (
+                            <p className="text-slate-500">No hay reportes recientes.</p>
+                        ) : (
+                            allReports.map(report => (
+                                <div key={report.id} onClick={() => { setSelectedReport(report); setSelectedPatientId(report.patientId); }} className="bg-slate-900 border border-slate-800 p-4 rounded-xl cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="font-bold text-white">{getPatientName(report.patientId)}</span>
+                                        <span className="text-xs text-slate-500">{new Date(report.date).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className="flex gap-4 text-sm">
+                                        <span className="text-emerald-400">{report.content.positives.length} Positivos</span>
+                                        <span className="text-slate-400">{report.content.negatives.length} Negativos</span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* SCHEDULE TAB */}
+            {activeSection === 'schedule' && (
+                <div className="animate-slide-up">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-4">
+                             <button onClick={handlePrevWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400">
+                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                             </button>
+                             <h2 className="text-lg font-bold text-white">Semana del {currentWeekStart.toLocaleDateString()}</h2>
+                             <button onClick={handleNextWeek} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400">
+                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                             </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <div className="min-w-[800px] grid grid-cols-6 gap-2">
+                            <div className="pt-10">
+                                {Array.from({length: 9}).map((_, i) => (
+                                    <div key={i} className="h-16 text-right pr-4 text-xs text-slate-500 font-mono">
+                                        {(9+i).toString().padStart(2, '0')}:00
+                                    </div>
+                                ))}
+                            </div>
+                            {weekDays.map(day => (
+                                <div key={day.toISOString()} className="space-y-2">
+                                    <div className="text-center pb-2 border-b border-slate-800">
+                                        <p className="text-xs text-slate-500 uppercase">{day.toLocaleDateString(undefined, {weekday: 'short'})}</p>
+                                        <p className="text-white font-bold">{day.getDate()}</p>
+                                    </div>
+                                    <div className="space-y-2">
+                                         {Array.from({length: 9}).map((_, i) => {
+                                             const slotTime = new Date(day);
+                                             slotTime.setHours(9+i, 0, 0, 0);
+                                             
+                                             const appt = appointments.find(a => 
+                                                 a.startTime <= slotTime.getTime() && a.endTime > slotTime.getTime()
+                                             );
+
+                                             return (
+                                                 <div 
+                                                    key={i} 
+                                                    onClick={() => handleSlotClick(slotTime, appt)}
+                                                    className={`h-14 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer transition-all
+                                                        ${appt 
+                                                            ? (appt.status === 'blocked' 
+                                                                ? 'bg-slate-800 border-slate-700 text-slate-500' 
+                                                                : 'bg-indigo-600 border-indigo-500 text-white')
+                                                            : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800 text-transparent hover:text-slate-500'}
+                                                    `}
+                                                 >
+                                                     {appt && (appt.status === 'blocked' ? 'Bloqueado' : getPatientName(appt.patientId || ''))}
+                                                     {!appt && '+ Available'}
+                                                 </div>
+                                             );
+                                         })}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
             )}
-            
-            {/* FULL CLINICAL RECORD MODAL */}
-            {isViewingPatientDetails && selectedPatientId && createPortal(
-                <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col animate-scale-in overflow-hidden">
-                    {/* Header */}
-                    <div className="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shrink-0">
-                         <div className="flex items-center gap-4">
-                             <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold">{currentPatient?.name.charAt(0)}</div>
-                             <div>
-                                 <h2 className="text-xl font-bold text-white">{currentPatient?.name} {currentPatient?.surnames}</h2>
-                                 <div className="flex gap-4 text-xs text-slate-400">
-                                     <span>{currentPatient?.email}</span>
-                                     <span>|</span>
-                                     <span>{currentPatient?.phone || 'Sin teléfono'}</span>
+
+            {/* MODALS */}
+
+            {/* Create Patient Modal */}
+            {isCreatingPatient && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-lg border border-slate-800">
+                        <h2 className="text-2xl font-bold text-white mb-4">Registrar Nuevo Paciente</h2>
+                        {createMsg && <div className="mb-4 p-3 bg-brand-500/20 text-brand-300 rounded-lg text-sm">{createMsg}</div>}
+                        <form onSubmit={handleCreatePatient} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <input placeholder="Nombre" value={pName} onChange={e => setPName(e.target.value)} className="bg-slate-800 border-slate-700 rounded-xl p-3 text-white w-full" required />
+                                <input placeholder="Apellidos" value={pSurnames} onChange={e => setPSurnames(e.target.value)} className="bg-slate-800 border-slate-700 rounded-xl p-3 text-white w-full" />
+                            </div>
+                            <input type="email" placeholder="Email" value={pEmail} onChange={e => setPEmail(e.target.value)} className="bg-slate-800 border-slate-700 rounded-xl p-3 text-white w-full" required />
+                            <input type="tel" placeholder="Teléfono" value={pPhone} onChange={e => setPPhone(e.target.value)} className="bg-slate-800 border-slate-700 rounded-xl p-3 text-white w-full" />
+                            <input type="password" placeholder="Contraseña Temporal" value={pPassword} onChange={e => setPPassword(e.target.value)} className="bg-slate-800 border-slate-700 rounded-xl p-3 text-white w-full" required />
+                            <div className="flex gap-4 mt-6">
+                                <button type="button" onClick={() => setIsCreatingPatient(false)} className="flex-1 py-3 rounded-xl text-slate-400 hover:bg-slate-800">Cancelar</button>
+                                <button type="submit" className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-bold hover:bg-brand-600">Registrar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Template Builder Modal */}
+            {isBuilderMode && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-2xl border border-slate-800 h-[80vh] flex flex-col">
+                        <h2 className="text-2xl font-bold text-white mb-6">Constructor de Encuestas</h2>
+                        <input placeholder="Título de la Encuesta" value={newTemplateTitle} onChange={e => setNewTemplateTitle(e.target.value)} className="bg-slate-800 border-slate-700 rounded-xl p-3 text-white w-full mb-4" />
+                        
+                        <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+                             {questions.map((q, idx) => (
+                                 <div key={idx} className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                     <p className="text-white font-bold">{q.text}</p>
+                                     <p className="text-xs text-slate-500 uppercase mt-1">{q.type}</p>
+                                 </div>
+                             ))}
+                             <div className="bg-slate-800/50 p-4 rounded-xl border border-dashed border-slate-700">
+                                 <p className="text-center text-slate-500 text-sm">Añade preguntas (Funcionalidad simplificada para demo)</p>
+                                 <div className="flex justify-center gap-2 mt-2">
+                                     <button onClick={() => setQuestions([...questions, { id: crypto.randomUUID(), type: 'text', text: 'Nueva Pregunta de Texto' }])} className="text-xs bg-slate-700 text-white px-2 py-1 rounded">Texto</button>
+                                     <button onClick={() => setQuestions([...questions, { id: crypto.randomUUID(), type: 'scale', text: 'Nueva Escala 1-10' }])} className="text-xs bg-slate-700 text-white px-2 py-1 rounded">Escala</button>
                                  </div>
                              </div>
-                         </div>
-                         <button onClick={() => setIsViewingPatientDetails(false)} className="bg-slate-800 text-slate-400 px-4 py-2 rounded-lg hover:text-white">Cerrar Expediente</button>
-                    </div>
+                        </div>
 
-                    {/* Navigation Tabs */}
-                    <div className="bg-slate-900 border-b border-slate-800 px-4 flex gap-6 overflow-x-auto shrink-0">
-                        {[
-                            { id: 'general', label: '1. Información Básica' },
-                            { id: 'clinical', label: '2. Historial Clínico' },
-                            { id: 'treatment', label: '3. Tratamiento' },
-                            { id: 'evaluations', label: '4. Evaluaciones' },
-                            { id: 'admin', label: '5. Administrativo' }
-                        ].map(tab => (
-                            <button 
-                                key={tab.id}
-                                onClick={() => setActiveRecordTab(tab.id as any)}
-                                className={`py-4 text-sm font-bold uppercase tracking-wide border-b-2 transition-colors whitespace-nowrap ${activeRecordTab === tab.id ? 'border-brand-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-                            >
-                                {tab.label}
+                        <div className="flex gap-4">
+                            <button onClick={() => setIsBuilderMode(false)} className="flex-1 py-3 rounded-xl text-slate-400 hover:bg-slate-800">Cancelar</button>
+                            <button onClick={handleCreateTemplate} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700">Guardar Plantilla</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Resource Modal */}
+            {isResourceMode && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-md border border-slate-800">
+                        <h2 className="text-2xl font-bold text-white mb-6">Añadir Recurso</h2>
+                        <div className="space-y-4">
+                            <input placeholder="Título" value={resTitle} onChange={e => setResTitle(e.target.value)} className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white" />
+                            <textarea placeholder="Descripción" value={resDesc} onChange={e => setResDesc(e.target.value)} className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white h-24 resize-none" />
+                            <select value={resType} onChange={e => setResType(e.target.value as any)} className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white">
+                                <option value="image">Imagen</option>
+                                <option value="pdf">PDF</option>
+                                <option value="video">Video</option>
+                                <option value="link">Enlace Web</option>
+                            </select>
+                            <input placeholder="URL del recurso" value={resUrl} onChange={e => setResUrl(e.target.value)} className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white" />
+                        </div>
+                        <div className="flex gap-4 mt-6">
+                            <button onClick={() => setIsResourceMode(false)} className="flex-1 py-3 rounded-xl text-slate-400 hover:bg-slate-800">Cancelar</button>
+                            <button onClick={handleCreateResource} className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700">Guardar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PATIENT DETAIL MODAL (HUGE) */}
+            {isViewingPatientDetails && currentPatient && createPortal(
+                <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col animate-slide-up">
+                    {/* Header */}
+                    <div className="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shadow-xl z-20">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setIsViewingPatientDetails(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400">
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                             </button>
-                        ))}
+                            <div>
+                                <h2 className="text-xl font-bold text-white">{currentPatient.name} {currentPatient.surnames}</h2>
+                                <p className="text-xs text-slate-400">{currentPatient.email} • ID: {currentPatient.id}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {['general', 'clinical', 'treatment', 'evaluations', 'admin'].map(tab => (
+                                <button 
+                                    key={tab}
+                                    onClick={() => setActiveRecordTab(tab as any)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold uppercase transition-colors ${activeRecordTab === tab ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-white hover:bg-slate-800'}`}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Content Area */}
-                    <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-950">
-                        <div className="max-w-6xl mx-auto space-y-8">
-                            
-                            {/* TAB 1: GENERAL INFO */}
-                            {activeRecordTab === 'general' && (
-                                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                    <div className="flex justify-between mb-6">
-                                        <h3 className="text-lg font-bold text-white">Datos del Paciente</h3>
-                                        <button onClick={() => isEditingBasic ? saveBasicInfo() : setIsEditingBasic(true)} className="text-brand-400 font-bold text-sm">
-                                            {isEditingBasic ? 'Guardar Cambios' : 'Editar Información'}
+                    <div className="flex-1 overflow-y-auto p-6 md:p-10 max-w-7xl mx-auto w-full space-y-8">
+                        
+                        {/* GENERAL TAB */}
+                        {activeRecordTab === 'general' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="font-bold text-white">Información Personal</h3>
+                                        <button onClick={() => { if(isEditingBasic) saveBasicInfo(); else setIsEditingBasic(true); }} className="text-xs text-indigo-400 hover:text-indigo-300 uppercase font-bold">
+                                            {isEditingBasic ? 'Guardar' : 'Editar'}
                                         </button>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Fecha Nacimiento</label>
-                                            {isEditingBasic ? <input type="date" className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.birthDate || ''} onChange={e => setBasicForm({...basicForm, birthDate: e.target.value})} /> : <p className="text-white">{currentPatient?.birthDate || 'No registrada'}</p>}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Edad</label>
-                                            <p className="text-white">{currentPatient?.birthDate ? Math.floor((Date.now() - new Date(currentPatient.birthDate).getTime()) / 31557600000) + ' años' : '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Género</label>
-                                            {isEditingBasic ? <select className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.gender || ''} onChange={e => setBasicForm({...basicForm, gender: e.target.value})}><option value="">Selec...</option><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option><option value="No Binario">No Binario</option><option value="Otro">Otro</option></select> : <p className="text-white">{currentPatient?.gender || '-'}</p>}
-                                        </div>
-                                        <div className="space-y-1 md:col-span-2">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Dirección</label>
-                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.address || ''} onChange={e => setBasicForm({...basicForm, address: e.target.value})} /> : <p className="text-white">{currentPatient?.address || '-'}</p>}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Email</label>
-                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.email || ''} onChange={e => setBasicForm({...basicForm, email: e.target.value})} /> : <p className="text-white">{currentPatient?.email || '-'}</p>}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Teléfono</label>
-                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.phone || ''} onChange={e => setBasicForm({...basicForm, phone: e.target.value})} /> : <p className="text-white">{currentPatient?.phone || '-'}</p>}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Ocupación</label>
-                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.occupation || ''} onChange={e => setBasicForm({...basicForm, occupation: e.target.value})} /> : <p className="text-white">{currentPatient?.occupation || '-'}</p>}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Estado Civil</label>
-                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.maritalStatus || ''} onChange={e => setBasicForm({...basicForm, maritalStatus: e.target.value})} /> : <p className="text-white">{currentPatient?.maritalStatus || '-'}</p>}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Seguro Médico</label>
-                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.insuranceNumber || ''} onChange={e => setBasicForm({...basicForm, insuranceNumber: e.target.value})} /> : <p className="text-white">{currentPatient?.insuranceNumber || 'N/A'}</p>}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Fuente de Referencia</label>
-                                            {isEditingBasic ? <input className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" value={basicForm.referralSource || ''} onChange={e => setBasicForm({...basicForm, referralSource: e.target.value})} /> : <p className="text-white">{currentPatient?.referralSource || '-'}</p>}
-                                        </div>
+                                    <div className="space-y-4">
+                                        {[
+                                            { label: 'Teléfono', key: 'phone' },
+                                            { label: 'Dirección', key: 'address' },
+                                            { label: 'Ocupación', key: 'occupation' },
+                                            { label: 'Estado Civil', key: 'maritalStatus' },
+                                            { label: 'Fecha Nacimiento', key: 'birthDate', type: 'date' },
+                                            { label: 'Seguro Médico', key: 'insuranceNumber' }
+                                        ].map(field => (
+                                            <div key={field.key}>
+                                                <label className="text-xs text-slate-500 uppercase font-bold">{field.label}</label>
+                                                {isEditingBasic ? (
+                                                    <input 
+                                                        type={field.type || 'text'}
+                                                        value={(basicForm as any)[field.key] || ''}
+                                                        onChange={e => setBasicForm({...basicForm, [field.key]: e.target.value})}
+                                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white mt-1"
+                                                    />
+                                                ) : (
+                                                    <p className="text-white">{(currentPatient as any)[field.key] || 'No registrado'}</p>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            )}
-
-                            {/* TAB 2: CLINICAL HISTORY */}
-                            {activeRecordTab === 'clinical' && (
                                 <div className="space-y-6">
-                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                        <div className="flex justify-between mb-4">
-                                            <h3 className="text-lg font-bold text-white">Antecedentes Médicos y Diagnóstico</h3>
-                                            <button onClick={() => isEditingClinical ? saveClinicalInfo() : setIsEditingClinical(true)} className="text-brand-400 font-bold text-sm">
-                                                {isEditingClinical ? 'Guardar' : 'Editar'}
-                                            </button>
-                                        </div>
-                                        <div className="space-y-6">
-                                            {/* Reason & Diagnosis */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-slate-800">
-                                                <div>
-                                                    <label className="text-xs text-slate-500 uppercase font-bold">Motivo Consulta</label>
-                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" rows={3} value={clinicalForm.reasonForConsult || ''} onChange={e => setClinicalForm({...clinicalForm, reasonForConsult: e.target.value})} /> : <p className="text-white mt-1 bg-slate-800/50 p-3 rounded-lg border border-slate-800 text-sm leading-relaxed">{clinicalProfile?.reasonForConsult || 'Sin datos'}</p>}
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-slate-500 uppercase font-bold">Diagnóstico</label>
-                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" rows={3} value={clinicalForm.diagnosis || ''} onChange={e => setClinicalForm({...clinicalForm, diagnosis: e.target.value})} /> : <p className="text-white mt-1 bg-slate-800/50 p-3 rounded-lg border border-slate-800 text-sm font-bold">{clinicalProfile?.diagnosis || '-'}</p>}
-                                                </div>
-                                            </div>
-
-                                            {/* Risk */}
-                                            <div className="pb-6 border-b border-slate-800">
-                                                <div className="flex items-center gap-4 mb-2">
-                                                    <label className="text-xs text-slate-500 uppercase font-bold">Evaluación de Riesgo</label>
-                                                    {isEditingClinical ? (
-                                                        <select className="bg-slate-800 text-white p-1 rounded border border-slate-700 text-sm" value={clinicalForm.riskLevel || 'Bajo'} onChange={e => setClinicalForm({...clinicalForm, riskLevel: e.target.value as any})}><option value="Bajo">Bajo</option><option value="Medio">Medio</option><option value="Alto">Alto</option></select>
-                                                    ) : (
-                                                        <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${clinicalProfile?.riskLevel === 'Alto' ? 'bg-red-500 text-white' : clinicalProfile?.riskLevel === 'Medio' ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}`}>{clinicalProfile?.riskLevel || 'Bajo'}</span>
-                                                    )}
-                                                </div>
-                                                {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700" placeholder="Detalles de riesgo (suicidio, autolesión, etc.)" value={clinicalForm.riskDetails || ''} onChange={e => setClinicalForm({...clinicalForm, riskDetails: e.target.value})} /> : <p className="text-slate-300 text-sm italic">{clinicalProfile?.riskDetails || 'Sin detalles de riesgo específicos.'}</p>}
-                                            </div>
-
-                                            {/* History Breakdown */}
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                <div>
-                                                    <label className="text-xs text-slate-500 uppercase font-bold">Condiciones Preexistentes</label>
-                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" placeholder="Separar por comas..." value={Array.isArray(clinicalForm.preexistingConditions) ? clinicalForm.preexistingConditions.join(', ') : (clinicalForm.preexistingConditions || '')} onChange={e => setClinicalForm({...clinicalForm, preexistingConditions: e.target.value as any})} /> : (
-                                                        <ul className="list-disc list-inside text-sm text-slate-300 mt-1">
-                                                            {clinicalProfile?.preexistingConditions?.length ? clinicalProfile.preexistingConditions.map((c,i) => <li key={i}>{c}</li>) : <li>Ninguna reportada</li>}
-                                                        </ul>
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-slate-500 uppercase font-bold">Medicación Actual</label>
-                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" value={clinicalForm.currentMedication || ''} onChange={e => setClinicalForm({...clinicalForm, currentMedication: e.target.value})} /> : <p className="text-slate-300 text-sm mt-1">{clinicalProfile?.currentMedication || 'Ninguna'}</p>}
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-slate-500 uppercase font-bold">Tratamientos Anteriores</label>
-                                                    {isEditingClinical ? <textarea className="w-full bg-slate-800 text-white p-2 rounded border border-slate-700 mt-1" value={clinicalForm.previousTreatments || ''} onChange={e => setClinicalForm({...clinicalForm, previousTreatments: e.target.value})} /> : <p className="text-slate-300 text-sm mt-1">{clinicalProfile?.previousTreatments || 'Ninguno'}</p>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* SESSIONS LIST */}
-                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                        <div className="flex justify-between items-center mb-6">
-                                            <h3 className="text-lg font-bold text-white">Historial de Sesiones</h3>
-                                            <button onClick={() => setIsAddingSession(true)} className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-brand-600">Nueva Sesión</button>
-                                        </div>
-                                        
-                                        {isAddingSession && (
-                                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 animate-slide-up">
-                                                <h4 className="font-bold text-white mb-4">Registrar Sesión</h4>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                    <input type="date" className="bg-slate-900 border border-slate-700 rounded p-2 text-white" onChange={e => setSessionForm({...sessionForm, date: e.target.value as any})} />
-                                                    <input type="number" placeholder="Progreso (0-100)" className="bg-slate-900 border border-slate-700 rounded p-2 text-white" onChange={e => setSessionForm({...sessionForm, progress: parseInt(e.target.value)})} />
-                                                </div>
-                                                <textarea placeholder="Objetivos de la sesión" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white mb-2" rows={2} onChange={e => setSessionForm({...sessionForm, objectives: e.target.value})} />
-                                                <textarea placeholder="Resumen / Notas clínicas" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white mb-3" rows={3} onChange={e => setSessionForm({...sessionForm, summary: e.target.value})} />
-                                                <textarea placeholder="Próximos pasos" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white mb-4" rows={2} onChange={e => setSessionForm({...sessionForm, nextSteps: e.target.value})} />
-                                                <div className="flex justify-end gap-2">
-                                                    <button onClick={() => setIsAddingSession(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
-                                                    <button onClick={addSession} className="bg-brand-500 text-white px-4 py-2 rounded font-bold">Guardar</button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="space-y-4">
-                                            {sessions.length === 0 ? <p className="text-slate-500 italic">No hay sesiones registradas.</p> : sessions.map(s => (
-                                                <div key={s.id} className="border-l-2 border-brand-500 pl-4 py-2 relative">
-                                                    <div className="absolute -left-[9px] top-2 w-4 h-4 rounded-full bg-brand-500 border-2 border-slate-900"></div>
-                                                    <div className="flex justify-between items-start">
-                                                        <span className="text-xs font-bold text-brand-400">{new Date(s.date).toLocaleDateString()}</span>
-                                                        <span className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded">Progreso: {s.progress}%</span>
-                                                    </div>
-                                                    <h4 className="text-white font-bold text-sm mt-1">{s.objectives}</h4>
-                                                    <p className="text-slate-400 text-sm mt-1">{s.summary}</p>
-                                                    {s.nextSteps && <p className="text-xs text-slate-500 mt-2 bg-slate-800/30 p-2 rounded">Next: {s.nextSteps}</p>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                         <h3 className="font-bold text-white mb-4">Notas Rápidas</h3>
+                                         <textarea className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-slate-300 h-32 resize-none" placeholder="Añadir nota privada..." />
+                                     </div>
+                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                         <h3 className="font-bold text-white mb-4">Próxima Cita</h3>
+                                         <button onClick={() => { setIsViewingPatientDetails(false); onSectionChange('schedule'); }} className="w-full py-3 border border-dashed border-slate-700 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">
+                                             Agendar Cita
+                                         </button>
+                                     </div>
                                 </div>
-                            )}
+                            </div>
+                        )}
 
-                            {/* TAB 3: TREATMENT & GOALS */}
-                            {activeRecordTab === 'treatment' && (
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <div className="space-y-6">
-                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                            <h3 className="text-lg font-bold text-white mb-4">Enfoque Terapéutico</h3>
-                                            <div className="relative">
-                                                <textarea 
-                                                    className="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-700 focus:border-brand-500 outline-none h-32 resize-none"
-                                                    placeholder="Describa el enfoque (ej. Terapia Cognitivo Conductual...)"
-                                                    value={clinicalProfile?.therapeuticApproach || ''}
-                                                    onChange={e => setClinicalProfile(prev => prev ? ({...prev, therapeuticApproach: e.target.value}) : null)}
-                                                    onBlur={() => saveClinicalProfile({ ...clinicalProfile, therapeuticApproach: clinicalProfile?.therapeuticApproach, userId: selectedPatientId })}
-                                                />
-                                                <span className="absolute bottom-2 right-2 text-[10px] text-slate-500">Auto-guardado al salir</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                            <div className="flex justify-between items-center mb-6">
-                                                <h3 className="text-lg font-bold text-white">Tareas Activas</h3>
-                                                <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">{activeTasks.length} pendientes</span>
-                                            </div>
-                                            <ul className="space-y-2">
-                                                {activeTasks.map(t => (
-                                                    <li key={t.id} className="flex items-center gap-2 text-sm text-slate-300">
-                                                        <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                                                        {t.templateTitle} (Asignado: {new Date(t.assignedAt).toLocaleDateString()})
-                                                    </li>
-                                                ))}
-                                                {activeTasks.length === 0 && <li className="text-slate-500 italic text-sm">No hay tareas pendientes.</li>}
-                                            </ul>
-                                        </div>
-                                        
-                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                            <h3 className="text-lg font-bold text-white mb-4">Feedback del Paciente</h3>
-                                            <div className="relative">
-                                                <textarea 
-                                                    className="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-700 focus:border-brand-500 outline-none h-32 resize-none"
-                                                    placeholder="Registro de comentarios sobre la eficacia del tratamiento..."
-                                                    value={clinicalProfile?.patientFeedback || ''}
-                                                    onChange={e => setClinicalProfile(prev => prev ? ({...prev, patientFeedback: e.target.value}) : null)}
-                                                    onBlur={() => saveClinicalProfile({ ...clinicalProfile, patientFeedback: clinicalProfile?.patientFeedback, userId: selectedPatientId })}
-                                                />
-                                                <span className="absolute bottom-2 right-2 text-[10px] text-slate-500">Auto-guardado al salir</span>
-                                            </div>
-                                        </div>
+                        {/* CLINICAL TAB */}
+                        {activeRecordTab === 'clinical' && (
+                             <div className="space-y-8">
+                                 {/* Clinical Profile */}
+                                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                     <div className="flex justify-between items-center mb-6">
+                                        <h3 className="font-bold text-white text-lg">Perfil Clínico</h3>
+                                        <button onClick={() => { if(isEditingClinical) saveClinicalInfo(); else setIsEditingClinical(true); }} className="text-xs text-indigo-400 hover:text-indigo-300 uppercase font-bold">
+                                            {isEditingClinical ? 'Guardar Cambios' : 'Editar Perfil'}
+                                        </button>
                                     </div>
-
-                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-fit">
-                                        <div className="flex justify-between items-center mb-6">
-                                            <h3 className="text-lg font-bold text-white">Objetivos Terapéuticos</h3>
-                                            <button onClick={() => setIsAddingGoal(true)} className="text-brand-400 text-sm font-bold border border-brand-500/30 px-3 py-1 rounded hover:bg-brand-500/10">+ Añadir Objetivo</button>
-                                        </div>
-
-                                        {isAddingGoal && (
-                                            <div className="flex gap-2 mb-4 animate-slide-up">
-                                                <input className="flex-1 bg-slate-800 border border-slate-700 rounded p-2 text-white" placeholder="Descripción del objetivo" value={goalForm.desc} onChange={e => setGoalForm({...goalForm, desc: e.target.value})} />
-                                                <select className="bg-slate-800 border border-slate-700 rounded p-2 text-white" value={goalForm.type} onChange={e => setGoalForm({...goalForm, type: e.target.value})}>
-                                                    <option value="short_term">Corto Plazo</option>
-                                                    <option value="long_term">Largo Plazo</option>
-                                                </select>
-                                                <button onClick={addGoal} className="bg-emerald-500 text-white px-4 rounded font-bold">OK</button>
-                                            </div>
-                                        )}
-
-                                        <div className="space-y-3">
-                                            {goals.map(g => (
-                                                <div key={g.id} className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                                                    <button 
-                                                        onClick={() => updateTreatmentGoalStatus(g.id, g.status === 'achieved' ? 'pending' : 'achieved').then(() => loadPatientRecord(selectedPatientId))}
-                                                        className={`w-5 h-5 rounded border flex items-center justify-center ${g.status === 'achieved' ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'}`}
-                                                    >
-                                                        {g.status === 'achieved' && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                                    </button>
-                                                    <div className="flex-1">
-                                                        <p className={`text-sm ${g.status === 'achieved' ? 'text-slate-500 line-through' : 'text-white'}`}>{g.description}</p>
-                                                        <span className="text-[10px] text-slate-500 uppercase font-bold">{g.type === 'short_term' ? 'Corto Plazo' : 'Largo Plazo'}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {goals.length === 0 && <p className="text-slate-500 italic text-sm">Sin objetivos definidos.</p>}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* TAB 4: EVALUATIONS (Surveys & Naretbox) */}
-                            {activeRecordTab === 'evaluations' && (
-                                <div className="space-y-6">
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Emociones (Naretbox)</h3>
-                                              <div className="h-48 w-full">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <BarChart data={modalStats.naretData}>
-                                                        <Bar dataKey="Positivo" fill="#10b981" radius={[2, 2, 0, 0]} />
-                                                        <Bar dataKey="Negativo" fill="#475569" radius={[2, 2, 0, 0]} />
-                                                        <RechartsTooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }} />
-                                                    </BarChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </div>
-                                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Evolución BDI-II (Depresión)</h3>
-                                            {modalStats.bdiData.length > 1 ? (
-                                                <div className="h-48 w-full">
-                                                    <ResponsiveContainer width="100%" height="100%">
-                                                        <LineChart data={modalStats.bdiData}>
-                                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                                                            <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} />
-                                                            <YAxis stroke="#94a3b8" fontSize={10} domain={[0, 63]} />
-                                                            <RechartsTooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }} />
-                                                            <Line type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2} dot={{ r: 4 }} />
-                                                        </LineChart>
-                                                    </ResponsiveContainer>
-                                                </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Diagnóstico Principal</label>
+                                            {isEditingClinical ? (
+                                                <input value={clinicalForm.diagnosis || ''} onChange={e => setClinicalForm({...clinicalForm, diagnosis: e.target.value})} className="w-full bg-slate-800 border-slate-700 rounded-lg p-2 text-white mt-1" />
                                             ) : (
-                                                <div className="h-48 flex items-center justify-center text-slate-500 text-sm italic border border-dashed border-slate-700 rounded-xl">
-                                                    Se necesitan al menos 2 evaluaciones BDI-II para ver la tendencia.
-                                                </div>
+                                                <p className="text-white font-medium text-lg">{clinicalProfile?.diagnosis || 'No definido'}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Nivel de Riesgo</label>
+                                            {isEditingClinical ? (
+                                                <select value={clinicalForm.riskLevel || 'Bajo'} onChange={e => setClinicalForm({...clinicalForm, riskLevel: e.target.value as any})} className="w-full bg-slate-800 border-slate-700 rounded-lg p-2 text-white mt-1">
+                                                    <option value="Bajo">Bajo</option>
+                                                    <option value="Medio">Medio</option>
+                                                    <option value="Alto">Alto</option>
+                                                </select>
+                                            ) : (
+                                                <span className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold uppercase ${clinicalProfile?.riskLevel === 'Alto' ? 'bg-red-500/20 text-red-400' : clinicalProfile?.riskLevel === 'Medio' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                                    {clinicalProfile?.riskLevel || 'Bajo'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="text-xs text-slate-500 uppercase font-bold">Motivo de Consulta</label>
+                                            {isEditingClinical ? (
+                                                <textarea value={clinicalForm.reasonForConsult || ''} onChange={e => setClinicalForm({...clinicalForm, reasonForConsult: e.target.value})} className="w-full bg-slate-800 border-slate-700 rounded-lg p-2 text-white mt-1" />
+                                            ) : (
+                                                <p className="text-slate-300">{clinicalProfile?.reasonForConsult || '-'}</p>
                                             )}
                                         </div>
                                     </div>
+                                 </div>
 
-                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                                            <h3 className="text-lg font-bold text-white">Historial de Evaluaciones</h3>
-                                            <div className="flex gap-2 w-full md:w-auto">
-                                                <select className="bg-slate-950 text-white p-2 rounded-lg border border-slate-700 text-sm flex-1 md:flex-none" onChange={(e) => setSelectedTemplateId(e.target.value)} value={selectedTemplateId}>
-                                                        <option value="">Nueva Evaluación...</option>
-                                                        <option value={INITIAL_MENTAL_HEALTH_ASSESSMENT.id}>{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</option>
-                                                        <option value={BDI_II_ASSESSMENT.id}>{BDI_II_ASSESSMENT.title}</option>
-                                                        {displayTemplates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                                                </select>
-                                                <button onClick={() => { handleAssign().then(() => loadPatientRecord(selectedPatientId)); }} className="bg-brand-500 text-white px-4 rounded-lg font-bold text-sm">Asignar</button>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="space-y-2">
-                                            {patientSurveys.filter(s => s.status === 'completed').map(s => (
-                                                <div key={s.id} className="flex justify-between items-center p-4 bg-slate-800/50 rounded-lg border border-slate-800 hover:border-brand-500/50 cursor-pointer group" onClick={() => setViewingAssignment(s)}>
-                                                    <div>
-                                                        <p className="text-white font-bold text-sm group-hover:text-brand-300 transition-colors">{s.templateTitle}</p>
-                                                        <p className="text-xs text-slate-500">{new Date(s.completedAt || 0).toLocaleDateString()}</p>
-                                                    </div>
-                                                    <button className="bg-slate-900 text-slate-400 hover:text-white px-3 py-1 rounded text-xs font-bold border border-slate-700">Ver Informe</button>
-                                                </div>
-                                            ))}
-                                            {patientSurveys.filter(s => s.status === 'completed').length === 0 && <p className="text-slate-500 italic text-center py-4">No hay evaluaciones completadas.</p>}
-                                        </div>
-                                    </div>
+                                 {/* Sessions History */}
+                                 <div>
+                                     <div className="flex justify-between items-center mb-4">
+                                         <h3 className="font-bold text-white text-lg">Historial de Sesiones</h3>
+                                         <button onClick={() => setIsAddingSession(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Nueva Sesión</button>
+                                     </div>
+                                     
+                                     {isAddingSession && (
+                                         <div className="bg-slate-800 p-6 rounded-2xl mb-6 border border-slate-700 animate-fade-in">
+                                             <h4 className="font-bold text-white mb-4">Registrar Sesión</h4>
+                                             <div className="grid grid-cols-2 gap-4 mb-4">
+                                                 <input type="date" onChange={e => setSessionForm({...sessionForm, date: e.target.value as any})} className="bg-slate-900 border-slate-700 rounded-lg p-2 text-white" />
+                                                 <input type="number" placeholder="Progreso (0-100)" onChange={e => setSessionForm({...sessionForm, progress: parseInt(e.target.value)})} className="bg-slate-900 border-slate-700 rounded-lg p-2 text-white" />
+                                             </div>
+                                             <textarea placeholder="Resumen de la sesión..." onChange={e => setSessionForm({...sessionForm, summary: e.target.value})} className="w-full bg-slate-900 border-slate-700 rounded-lg p-3 text-white h-24 mb-4" />
+                                             <div className="flex justify-end gap-2">
+                                                 <button onClick={() => setIsAddingSession(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
+                                                 <button onClick={addSession} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold">Guardar</button>
+                                             </div>
+                                         </div>
+                                     )}
+
+                                     <div className="space-y-4">
+                                         {sessions.length === 0 ? <p className="text-slate-500 italic">No hay sesiones registradas.</p> : sessions.map(s => (
+                                             <div key={s.id} className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+                                                 <div className="flex justify-between mb-2">
+                                                     <span className="font-bold text-white">{new Date(s.date).toLocaleDateString()}</span>
+                                                     <span className="text-xs text-indigo-400 font-bold">Progreso: {s.progress}%</span>
+                                                 </div>
+                                                 <p className="text-slate-300 text-sm">{s.summary}</p>
+                                             </div>
+                                         ))}
+                                     </div>
+                                 </div>
+                             </div>
+                        )}
+
+                        {/* TREATMENT TAB */}
+                        {activeRecordTab === 'treatment' && (
+                            <div className="space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-bold text-white text-lg">Objetivos Terapéuticos</h3>
+                                    <button onClick={() => setIsAddingGoal(true)} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm border border-slate-700">+ Objetivo</button>
                                 </div>
-                            )}
 
-                            {/* TAB 5: ADMINISTRATIVE (Finance & Reminders) */}
-                            {activeRecordTab === 'admin' && (
+                                {isAddingGoal && (
+                                     <div className="flex gap-4 items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                         <input placeholder="Descripción del objetivo" value={goalForm.desc} onChange={e => setGoalForm({...goalForm, desc: e.target.value})} className="flex-1 bg-slate-800 border-slate-700 rounded-lg p-2 text-white" />
+                                         <select value={goalForm.type} onChange={e => setGoalForm({...goalForm, type: e.target.value})} className="bg-slate-800 border-slate-700 rounded-lg p-2 text-white">
+                                             <option value="short_term">Corto Plazo</option>
+                                             <option value="long_term">Largo Plazo</option>
+                                         </select>
+                                         <button onClick={addGoal} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold">Guardar</button>
+                                     </div>
+                                )}
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Financials */}
-                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="text-lg font-bold text-white">Facturación</h3>
-                                            <button onClick={() => setIsAddingFinance(true)} className="text-emerald-400 text-xs font-bold border border-emerald-500/30 px-3 py-1 rounded hover:bg-emerald-500/10">+ Pago</button>
-                                        </div>
-
-                                        {isAddingFinance && (
-                                            <div className="bg-slate-950 p-3 rounded mb-4 animate-slide-up space-y-2">
-                                                <input className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" placeholder="Concepto" onChange={e => setFinanceForm({...financeForm, concept: e.target.value})} />
-                                                <div className="flex gap-2">
-                                                    <input type="number" className="w-1/3 bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" placeholder="Monto" onChange={e => setFinanceForm({...financeForm, amount: parseFloat(e.target.value)})} />
-                                                    <select className="w-1/3 bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" onChange={e => setFinanceForm({...financeForm, status: e.target.value as any})}>
-                                                        <option value="pending">Pendiente</option>
-                                                        <option value="paid">Pagado</option>
-                                                    </select>
-                                                    <select className="w-1/3 bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" onChange={e => setFinanceForm({...financeForm, method: e.target.value as any})}>
-                                                        <option value="card">Tarjeta</option>
-                                                        <option value="cash">Efectivo</option>
-                                                        <option value="transfer">Transf.</option>
-                                                    </select>
-                                                </div>
-                                                <button onClick={addFinance} className="w-full bg-emerald-600 text-white text-xs font-bold py-2 rounded">Guardar Registro</button>
-                                            </div>
-                                        )}
-
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Corto Plazo</h4>
                                         <div className="space-y-2">
-                                            {financials.map(f => (
-                                                <div key={f.id} className="flex justify-between items-center p-2 border-b border-slate-800 last:border-0">
-                                                    <div>
-                                                        <p className="text-white text-sm font-bold">{f.concept}</p>
-                                                        <p className="text-xs text-slate-500">{new Date(f.date).toLocaleDateString()} • {f.method === 'card' ? 'Tarjeta' : f.method === 'transfer' ? 'Transferencia' : 'Efectivo'}</p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-white font-mono">${f.amount}</p>
-                                                        <span className={`text-[10px] uppercase font-bold px-1 rounded ${f.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-orange-500/20 text-orange-400'}`}>
-                                                            {f.status === 'paid' ? 'Pagado' : 'Pendiente'}
-                                                        </span>
-                                                    </div>
+                                            {goals.filter(g => g.type === 'short_term').map(g => (
+                                                <div key={g.id} className="bg-slate-900 p-3 rounded-lg border border-slate-800 flex items-center gap-3">
+                                                    <input type="checkbox" checked={g.status === 'achieved'} onChange={() => {}} className="rounded bg-slate-800 border-slate-600" />
+                                                    <span className={g.status === 'achieved' ? 'text-slate-500 line-through' : 'text-slate-200'}>{g.description}</span>
                                                 </div>
                                             ))}
-                                            {financials.length === 0 && <p className="text-slate-500 italic text-xs">Sin registros financieros.</p>}
                                         </div>
                                     </div>
-
-                                    {/* Reminders */}
-                                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="text-lg font-bold text-white">Recordatorios</h3>
-                                            <button onClick={() => setIsAddingReminder(true)} className="text-indigo-400 text-xs font-bold border border-indigo-500/30 px-3 py-1 rounded hover:bg-indigo-500/10">+ Añadir</button>
-                                        </div>
-                                        
-                                        {isAddingReminder && (
-                                             <div className="bg-slate-950 p-3 rounded mb-4 animate-slide-up space-y-2">
-                                                <input className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" placeholder="Tarea / Recordatorio" onChange={e => setReminderForm({...reminderForm, title: e.target.value})} />
-                                                <input type="datetime-local" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" onChange={e => setReminderForm({...reminderForm, date: e.target.value})} />
-                                                <div className="flex gap-2">
-                                                    <button onClick={addReminder} className="flex-1 bg-indigo-600 text-white text-xs font-bold py-2 rounded">Guardar</button>
-                                                    <button onClick={() => alert("Función de envío de notificación en desarrollo.")} className="flex-1 bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded border border-slate-700">Notificar al Paciente</button>
-                                                </div>
-                                            </div>
-                                        )}
-
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Largo Plazo</h4>
                                         <div className="space-y-2">
-                                            {reminders.map(r => (
-                                                <div key={r.id} className="flex items-center gap-3 p-2 bg-slate-800/30 rounded border border-slate-800">
-                                                    <div className={`w-2 h-2 rounded-full ${r.isCompleted ? 'bg-emerald-500' : 'bg-indigo-500'}`}></div>
-                                                    <div className="flex-1">
-                                                        <p className={`text-sm ${r.isCompleted ? 'text-slate-500 line-through' : 'text-white'}`}>{r.title}</p>
-                                                        <p className="text-xs text-slate-500">{new Date(r.date).toLocaleString()}</p>
-                                                    </div>
+                                            {goals.filter(g => g.type === 'long_term').map(g => (
+                                                <div key={g.id} className="bg-slate-900 p-3 rounded-lg border border-slate-800 flex items-center gap-3">
+                                                    <input type="checkbox" checked={g.status === 'achieved'} onChange={() => {}} className="rounded bg-slate-800 border-slate-600" />
+                                                    <span className={g.status === 'achieved' ? 'text-slate-500 line-through' : 'text-slate-200'}>{g.description}</span>
                                                 </div>
                                             ))}
-                                             {reminders.length === 0 && <p className="text-slate-500 italic text-xs">Sin recordatorios pendientes.</p>}
                                         </div>
                                     </div>
                                 </div>
-                            )}
-
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
-
-            {/* Modal for Survey Results - PORTALED */}
-            {viewingAssignment && createPortal(
-                <div 
-                    className="fixed top-0 left-0 w-screen h-screen z-[250] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
-                    onClick={() => setViewingAssignment(null)}
-                >
-                    <div 
-                        className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-                            <div>
-                                <h3 className="text-xl font-bold text-white">{viewingAssignment.templateTitle}</h3>
-                                <p className="text-sm text-slate-400">Resultados del {new Date(viewingAssignment.completedAt || 0).toLocaleDateString()}</p>
                             </div>
-                            <button onClick={() => setViewingAssignment(null)} className="text-slate-400 hover:text-white">✕</button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-6">
-                            <SurveyResultView assignment={viewingAssignment} templates={templates} />
-                        </div>
+                        )}
+
+                        {/* EVALUATIONS TAB */}
+                        {activeRecordTab === 'evaluations' && (
+                            <div className="space-y-8">
+                                {/* Charts Row */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-64">
+                                    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Balance Emocional (Últimos 7 días)</h4>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={modalStats.naretData}>
+                                                <XAxis dataKey="date" stroke="#64748b" fontSize={10} />
+                                                <YAxis stroke="#64748b" fontSize={10} />
+                                                <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b'}} />
+                                                <Legend />
+                                                <Bar dataKey="Positivo" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                                <Bar dataKey="Negativo" fill="#64748b" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Evolución BDI-II</h4>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={modalStats.bdiData}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                                                <XAxis dataKey="date" stroke="#64748b" fontSize={10} />
+                                                <YAxis stroke="#64748b" fontSize={10} />
+                                                <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b'}} />
+                                                <Line type="monotone" dataKey="score" stroke="#8884d8" strokeWidth={2} dot={{fill: '#8884d8'}} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Assign Tool Area */}
+                                <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+                                    <h4 className="font-bold text-white mb-4">Asignar Nueva Evaluación</h4>
+                                    <div className="flex gap-4">
+                                        <select value={selectedTemplateId} onChange={e => setSelectedTemplateId(e.target.value)} className="flex-1 bg-slate-900 border-slate-700 rounded-xl p-3 text-white">
+                                            <option value="">Seleccionar Plantilla...</option>
+                                            <option value={INITIAL_MENTAL_HEALTH_ASSESSMENT.id}>{INITIAL_MENTAL_HEALTH_ASSESSMENT.title}</option>
+                                            <option value={BDI_II_ASSESSMENT.id}>{BDI_II_ASSESSMENT.title}</option>
+                                            {displayTemplates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                                        </select>
+                                        <button onClick={handleAssign} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl">Asignar</button>
+                                    </div>
+                                </div>
+
+                                {/* History List */}
+                                <div>
+                                    <h4 className="font-bold text-white mb-4">Historial de Evaluaciones</h4>
+                                    <div className="space-y-3">
+                                        {patientSurveys.map(s => (
+                                            <div key={s.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-bold text-white">{s.templateTitle}</p>
+                                                    <p className="text-xs text-slate-500">Asignado: {new Date(s.assignedAt).toLocaleDateString()} {s.completedAt ? `• Completado: ${new Date(s.completedAt).toLocaleDateString()}` : ''}</p>
+                                                </div>
+                                                {s.status === 'completed' ? (
+                                                    <button onClick={() => { setViewingAssignment(s); }} className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/20 font-bold">Ver Resultados</button>
+                                                ) : (
+                                                    <span className="text-xs bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full border border-amber-500/20">Pendiente</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ADMIN TAB */}
+                        {activeRecordTab === 'admin' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-bold text-white">Registro Financiero</h3>
+                                        <button onClick={() => setIsAddingFinance(true)} className="text-xs bg-slate-800 px-3 py-1 rounded text-white">+ Registro</button>
+                                    </div>
+                                    {isAddingFinance && (
+                                        <div className="bg-slate-800 p-4 rounded-xl mb-4 text-sm">
+                                            <input type="date" onChange={e => setFinanceForm({...financeForm, date: e.target.value as any})} className="bg-slate-900 border-slate-700 rounded p-2 text-white w-full mb-2" />
+                                            <input type="number" placeholder="Monto" onChange={e => setFinanceForm({...financeForm, amount: parseInt(e.target.value)})} className="bg-slate-900 border-slate-700 rounded p-2 text-white w-full mb-2" />
+                                            <button onClick={addFinance} className="w-full bg-emerald-600 text-white rounded p-2 font-bold">Guardar</button>
+                                        </div>
+                                    )}
+                                    <div className="space-y-2">
+                                        {financials.map(f => (
+                                            <div key={f.id} className="bg-slate-900 p-3 rounded-lg flex justify-between">
+                                                <span className="text-slate-300">{new Date(f.date).toLocaleDateString()}</span>
+                                                <span className="text-white font-mono font-bold">${f.amount}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-bold text-white">Recordatorios</h3>
+                                        <button onClick={() => setIsAddingReminder(true)} className="text-xs bg-slate-800 px-3 py-1 rounded text-white">+ Recordatorio</button>
+                                    </div>
+                                    {isAddingReminder && (
+                                        <div className="bg-slate-800 p-4 rounded-xl mb-4 text-sm">
+                                            <input type="text" placeholder="Título" onChange={e => setReminderForm({...reminderForm, title: e.target.value})} className="bg-slate-900 border-slate-700 rounded p-2 text-white w-full mb-2" />
+                                            <input type="date" onChange={e => setReminderForm({...reminderForm, date: e.target.value})} className="bg-slate-900 border-slate-700 rounded p-2 text-white w-full mb-2" />
+                                            <button onClick={addReminder} className="w-full bg-indigo-600 text-white rounded p-2 font-bold">Guardar</button>
+                                        </div>
+                                    )}
+                                    <div className="space-y-2">
+                                        {reminders.map(r => (
+                                            <div key={r.id} className="bg-slate-900 p-3 rounded-lg flex justify-between items-center">
+                                                <span className="text-slate-300">{r.title}</span>
+                                                <span className="text-xs text-slate-500">{new Date(r.date).toLocaleDateString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>,
                 document.body
             )}
             
-            {/* Modal for Template PREVIEW - PORTALED */}
-            {viewingTemplate && createPortal(
-                <div 
-                    className="fixed top-0 left-0 w-screen h-screen z-[250] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
-                    onClick={() => setViewingTemplate(null)}
-                >
-                    <div 
-                        className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-                            <div>
-                                <h3 className="text-xl font-bold text-white">{viewingTemplate.title}</h3>
-                                <p className="text-sm text-slate-400">Vista Previa de Preguntas</p>
-                            </div>
-                            <button onClick={() => setViewingTemplate(null)} className="text-slate-400 hover:text-white">✕</button>
+            {/* View Assignment Result Modal */}
+            {viewingAssignment && createPortal(
+                <div className="fixed inset-0 z-[250] bg-black/80 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 w-full max-w-2xl rounded-3xl p-8 border border-slate-800 max-h-[80vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-white">{viewingAssignment.templateTitle}</h3>
+                            <button onClick={() => setViewingAssignment(null)} className="text-slate-400 hover:text-white">Cerrar</button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                            {viewingTemplate.questions.map((q, idx) => (
-                                <div key={q.id} className="bg-slate-800/30 p-4 rounded-xl border border-slate-800">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <span className="bg-slate-700 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                                            {q.type === 'scale' ? 'Escala' : q.type === 'multiple_choice' ? 'Opción Múltiple' : 'Texto'}
-                                        </span>
-                                        <span className="text-slate-500 text-xs">Pregunta {idx + 1}</span>
-                                    </div>
-                                    <p className="text-white font-medium mb-3">{q.text}</p>
-                                    {q.options && (
-                                        <div className="space-y-2 pl-4 border-l border-slate-700">
-                                            {q.options.map((opt, i) => (
-                                                <div key={i} className="text-sm text-slate-400 flex items-center gap-2">
-                                                    <div className="w-2 h-2 rounded-full bg-slate-600"></div>
-                                                    {opt}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                        <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end">
-                            <button onClick={() => setViewingTemplate(null)} className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700">Cerrar Vista Previa</button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
-
-            {/* Modal for Patient Report - PORTALED */}
-            {selectedReport && createPortal(
-                <div 
-                    className="fixed top-0 left-0 w-screen h-screen z-[250] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
-                    onClick={() => setSelectedReport(null)}
-                >
-                    <div 
-                        className="bg-slate-900 w-full max-w-2xl max-h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-                            <div>
-                                <h3 className="text-xl font-bold text-white">Informe Diario</h3>
-                                <p className="text-sm text-slate-400">{new Date(selectedReport.date).toLocaleDateString()}</p>
-                            </div>
-                            <button onClick={() => setSelectedReport(null)} className="text-slate-400 hover:text-white">✕</button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                                <h4 className="text-emerald-400 font-bold mb-2 uppercase text-xs tracking-wider">Caja Positiva</h4>
-                                <ul className="list-disc list-inside text-slate-300 space-y-1 text-sm">
-                                    {selectedReport.content.positives.length > 0 ? selectedReport.content.positives.map((p, i) => <li key={i}>{p}</li>) : <li className="italic text-slate-600">Sin entradas</li>}
-                                </ul>
-                            </div>
-                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                                <h4 className="text-slate-400 font-bold mb-2 uppercase text-xs tracking-wider">Caja Negativa</h4>
-                                <ul className="list-disc list-inside text-slate-300 space-y-1 text-sm">
-                                    {selectedReport.content.negatives.length > 0 ? selectedReport.content.negatives.map((p, i) => <li key={i}>{p}</li>) : <li className="italic text-slate-600">Sin entradas</li>}
-                                </ul>
-                            </div>
-                            <div className="bg-indigo-900/20 p-4 rounded-xl border border-indigo-500/30">
-                                <h4 className="text-indigo-400 font-bold mb-2 uppercase text-xs tracking-wider">Resumen IA / Sistema</h4>
-                                <p className="text-slate-300 text-sm leading-relaxed">{selectedReport.content.summary}</p>
-                            </div>
-                        </div>
+                        <SurveyResultView assignment={viewingAssignment} templates={templates} />
                     </div>
                 </div>,
                 document.body
