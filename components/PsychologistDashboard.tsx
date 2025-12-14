@@ -505,6 +505,15 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
     const getPatientName = (id: string) => { const p = patients.find(pat => pat.id === id); return p ? `${p.name} ${p.surnames || ''}` : 'Usuario desconocido'; };
     const displayTemplates = templates.filter(t => t.id !== INITIAL_MENTAL_HEALTH_ASSESSMENT.id && t.id !== BDI_II_ASSESSMENT.id);
 
+    // Patient Detail Tab Configuration
+    const patientDetailTabs = [
+        { id: 'general', label: 'General', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
+        { id: 'clinical', label: 'Clínico', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
+        { id: 'treatment', label: 'Tratamiento', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+        { id: 'evaluations', label: 'Evaluaciones', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg> },
+        { id: 'admin', label: 'Admin', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
+    ];
+
     return (
         <div className="p-6 md:p-8 animate-fade-in max-w-7xl mx-auto pb-24 space-y-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-800 pb-6">
@@ -876,25 +885,33 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             {/* PATIENT DETAIL MODAL (HUGE) */}
             {isViewingPatientDetails && currentPatient && createPortal(
                 <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col animate-slide-up">
-                    {/* Header */}
-                    <div className="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shadow-xl z-20">
-                        <div className="flex items-center gap-4">
-                            <button onClick={() => setIsViewingPatientDetails(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400">
-                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                            </button>
-                            <div>
-                                <h2 className="text-xl font-bold text-white">{currentPatient.name} {currentPatient.surnames}</h2>
-                                <p className="text-xs text-slate-400">{currentPatient.email} • ID: {currentPatient.id}</p>
+                    {/* Sticky Header */}
+                    <div className="bg-slate-900 border-b border-slate-800 shadow-xl z-20 sticky top-0">
+                        <div className="p-4 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <button onClick={() => setIsViewingPatientDetails(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
+                                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                </button>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">{currentPatient.name} {currentPatient.surnames}</h2>
+                                    <p className="text-xs text-slate-400">{currentPatient.email} • ID: {currentPatient.id.slice(0, 8)}...</p>
+                                </div>
                             </div>
+                            <button onClick={() => setIsViewingPatientDetails(false)} className="text-slate-400 hover:text-white hidden md:block">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                            {['general', 'clinical', 'treatment', 'evaluations', 'admin'].map(tab => (
+                        
+                        {/* Navigation Tabs (Spanish) */}
+                        <div className="flex overflow-x-auto px-4 gap-2 pb-0">
+                            {patientDetailTabs.map(tab => (
                                 <button 
-                                    key={tab}
-                                    onClick={() => setActiveRecordTab(tab as any)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold uppercase transition-colors ${activeRecordTab === tab ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-white hover:bg-slate-800'}`}
+                                    key={tab.id}
+                                    onClick={() => setActiveRecordTab(tab.id as any)}
+                                    className={`flex items-center gap-2 px-4 py-3 border-b-2 font-bold text-sm whitespace-nowrap transition-colors ${activeRecordTab === tab.id ? 'border-brand-500 text-brand-500' : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-700'}`}
                                 >
-                                    {tab}
+                                    {tab.icon}
+                                    {tab.label}
                                 </button>
                             ))}
                         </div>
@@ -1080,35 +1097,39 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                             </div>
                         )}
 
-                        {/* EVALUATIONS TAB */}
+                        {/* EVALUATIONS TAB - FIXED CHARTS */}
                         {activeRecordTab === 'evaluations' && (
                             <div className="space-y-8">
-                                {/* Charts Row */}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-64">
-                                    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                                {/* Charts Row - Fixed Heights for Containers */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col h-80">
                                         <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Balance Emocional (Últimos 7 días)</h4>
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={modalStats.naretData}>
-                                                <XAxis dataKey="date" stroke="#64748b" fontSize={10} />
-                                                <YAxis stroke="#64748b" fontSize={10} />
-                                                <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b'}} />
-                                                <Legend />
-                                                <Bar dataKey="Positivo" fill="#10b981" radius={[4, 4, 0, 0]} />
-                                                <Bar dataKey="Negativo" fill="#64748b" radius={[4, 4, 0, 0]} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
+                                        <div className="flex-1 min-h-0 w-full">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={modalStats.naretData}>
+                                                    <XAxis dataKey="date" stroke="#64748b" fontSize={10} />
+                                                    <YAxis stroke="#64748b" fontSize={10} />
+                                                    <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b'}} />
+                                                    <Legend />
+                                                    <Bar dataKey="Positivo" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                                    <Bar dataKey="Negativo" fill="#64748b" radius={[4, 4, 0, 0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
                                     </div>
-                                    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col h-80">
                                         <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Evolución BDI-II</h4>
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <LineChart data={modalStats.bdiData}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                                <XAxis dataKey="date" stroke="#64748b" fontSize={10} />
-                                                <YAxis stroke="#64748b" fontSize={10} />
-                                                <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b'}} />
-                                                <Line type="monotone" dataKey="score" stroke="#8884d8" strokeWidth={2} dot={{fill: '#8884d8'}} />
-                                            </LineChart>
-                                        </ResponsiveContainer>
+                                        <div className="flex-1 min-h-0 w-full">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={modalStats.bdiData}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                                                    <XAxis dataKey="date" stroke="#64748b" fontSize={10} />
+                                                    <YAxis stroke="#64748b" fontSize={10} />
+                                                    <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b'}} />
+                                                    <Line type="monotone" dataKey="score" stroke="#8884d8" strokeWidth={2} dot={{fill: '#8884d8'}} />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        </div>
                                     </div>
                                 </div>
 
