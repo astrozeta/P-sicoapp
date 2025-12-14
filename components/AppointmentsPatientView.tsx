@@ -110,13 +110,13 @@ const AppointmentsPatientView: React.FC<Props> = ({ user, onClose }) => {
     }, {} as Record<string, Date[]>);
 
     return (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col animate-slide-up">
-            <div className="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 flex justify-between items-center shrink-0">
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col animate-slide-up" onClick={onClose}>
+            <div className="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 flex justify-between items-center shrink-0" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-white">Gestión de Citas</h2>
                 <button onClick={onClose} className="text-slate-400 hover:text-white px-3 py-2 bg-slate-800 rounded-lg">Cerrar</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-3xl mx-auto w-full">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-3xl mx-auto w-full" onClick={(e) => e.stopPropagation()}>
                 <div className="flex gap-4 mb-8">
                     <button 
                         onClick={() => setView('my_appointments')}
@@ -213,4 +213,3 @@ const AppointmentsPatientView: React.FC<Props> = ({ user, onClose }) => {
 };
 
 export default AppointmentsPatientView;
-

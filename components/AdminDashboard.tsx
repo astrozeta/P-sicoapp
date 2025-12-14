@@ -263,8 +263,8 @@ const AdminDashboard: React.FC = () => {
 
             {/* Edit User Modal */}
             {editingUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-slate-900 w-full max-w-lg rounded-3xl p-8 border border-slate-800 shadow-2xl animate-scale-in">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setEditingUser(null)}>
+                    <div className="bg-slate-900 w-full max-w-lg rounded-3xl p-8 border border-slate-800 shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-white">
                                 {isPasswordReset ? 'Restablecer Contraseña' : 'Editar Usuario'}

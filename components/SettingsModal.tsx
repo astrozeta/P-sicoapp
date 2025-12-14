@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppSettings } from '../types';
 
@@ -41,8 +42,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-sm bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-800 animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      <div className="w-full max-w-sm bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-800 animate-scale-in" onClick={(e) => e.stopPropagation()}>
         <div className="bg-slate-900 p-5 border-b border-slate-800 flex justify-between items-center">
             <h2 className="text-lg font-bold text-slate-200">Configuración</h2>
             <button onClick={onClose} className="text-slate-500 hover:text-slate-300">

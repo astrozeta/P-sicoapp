@@ -294,6 +294,102 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
         setIsResourceMode(false); setResTitle(''); setResDesc(''); setResUrl('');
     };
 
+    const generatePDF = (assignment: SurveyAssignment) => {
+        const staticTemplates = [INITIAL_MENTAL_HEALTH_ASSESSMENT, BDI_II_ASSESSMENT];
+        const template = templates.find(t => t.id === assignment.templateId) || staticTemplates.find(t => t.id === assignment.templateId);
+        
+        if (!template) {
+            alert("No se puede generar PDF: Plantilla no encontrada");
+            return;
+        }
+
+        const pName = getPatientName(assignment.patientId);
+        const date = new Date(assignment.completedAt || Date.now()).toLocaleDateString();
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert("Por favor permite las ventanas emergentes para generar el PDF");
+            return;
+        }
+
+        let htmlContent = `
+            <html>
+                <head>
+                    <title>Reporte: ${template.title}</title>
+                    <style>
+                        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; line-height: 1.6; padding: 40px; max-width: 800px; mx: auto; }
+                        .header { border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
+                        h1 { color: #2c3e50; font-size: 24px; margin: 0 0 10px 0; }
+                        .meta { color: #7f8c8d; font-size: 14px; }
+                        .question-block { margin-bottom: 25px; page-break-inside: avoid; border-bottom: 1px solid #f0f0f0; padding-bottom: 15px; }
+                        .question { font-weight: bold; margin-bottom: 8px; color: #34495e; }
+                        .answer { background: #f9f9f9; padding: 10px 15px; border-radius: 6px; border-left: 4px solid #3498db; }
+                        .footer { margin-top: 50px; font-size: 12px; text-align: center; color: #bdc3c7; border-top: 1px solid #eee; padding-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>${template.title}</h1>
+                        <div class="meta">
+                            <strong>Paciente:</strong> ${pName}<br>
+                            <strong>Fecha de finalización:</strong> ${date}<br>
+                            <strong>ID Asignación:</strong> ${assignment.id}
+                        </div>
+                    </div>
+        `;
+
+        // Calculate scores if standard
+        if (template.id === INITIAL_MENTAL_HEALTH_ASSESSMENT.id && assignment.responses) {
+             const res = calculateMentalHealthScore(assignment.responses);
+             htmlContent += `
+                <div style="background: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 30px;">
+                    <h3 style="margin-top:0;">Resumen de Puntuación</h3>
+                    <p><strong>Depresión:</strong> ${res.depression.level}</p>
+                    <p><strong>Ansiedad:</strong> ${res.anxiety.level}</p>
+                    <p><strong>Estrés:</strong> ${res.stress.level}</p>
+                    ${res.redFlags.length > 0 ? `<p style="color: red; font-weight: bold;">⚠️ ${res.redFlags.join(', ')}</p>` : ''}
+                </div>
+             `;
+        } else if (template.id === BDI_II_ASSESSMENT.id && assignment.responses) {
+             const res = calculateBDIScore(assignment.responses);
+             htmlContent += `
+                <div style="background: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 30px;">
+                    <h3 style="margin-top:0;">Resultado BDI-II</h3>
+                    <p><strong>Puntuación Total:</strong> ${res.score}</p>
+                    <p><strong>Nivel:</strong> ${res.level}</p>
+                    ${res.hasSuicidalRisk ? `<p style="color: red; font-weight: bold;">⚠️ RIESGO DE SUICIDIO DETECTADO</p>` : ''}
+                </div>
+             `;
+        }
+
+        // Questions and Answers
+        htmlContent += `<div class="responses">`;
+        template.questions.forEach((q, idx) => {
+            const response = assignment.responses?.find(r => r.questionId === q.id);
+            const answerText = response ? response.answer : 'Sin respuesta';
+            htmlContent += `
+                <div class="question-block">
+                    <div class="question">${idx + 1}. ${q.text}</div>
+                    <div class="answer">${answerText}</div>
+                </div>
+            `;
+        });
+        htmlContent += `</div>`;
+
+        htmlContent += `
+                    <div class="footer">
+                        Generado por NaretApp - Plataforma de Gestión Psicológica
+                    </div>
+                </body>
+            </html>
+        `;
+
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => printWindow.print(), 500);
+    };
+
     // --- CALENDAR LOGIC ---
 
     const handlePrevWeek = () => {
@@ -806,8 +902,8 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
             {/* Create Patient Modal */}
             {isCreatingPatient && (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-lg border border-slate-800">
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setIsCreatingPatient(false)}>
+                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-lg border border-slate-800" onClick={(e) => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold text-white mb-4">Registrar Nuevo Paciente</h2>
                         {createMsg && <div className="mb-4 p-3 bg-brand-500/20 text-brand-300 rounded-lg text-sm">{createMsg}</div>}
                         <form onSubmit={handleCreatePatient} className="space-y-4">
@@ -829,8 +925,8 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
             {/* Template Builder Modal */}
             {isBuilderMode && (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-2xl border border-slate-800 h-[80vh] flex flex-col">
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setIsBuilderMode(false)}>
+                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-2xl border border-slate-800 h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold text-white mb-6">Constructor de Encuestas</h2>
                         <input placeholder="Título de la Encuesta" value={newTemplateTitle} onChange={e => setNewTemplateTitle(e.target.value)} className="bg-slate-800 border-slate-700 rounded-xl p-3 text-white w-full mb-4" />
                         
@@ -860,8 +956,8 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
             {/* Resource Modal */}
             {isResourceMode && (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-md border border-slate-800">
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setIsResourceMode(false)}>
+                    <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-md border border-slate-800" onClick={(e) => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold text-white mb-6">Añadir Recurso</h2>
                         <div className="space-y-4">
                             <input placeholder="Título" value={resTitle} onChange={e => setResTitle(e.target.value)} className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white" />
@@ -884,9 +980,9 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 
             {/* PATIENT DETAIL MODAL (HUGE) */}
             {isViewingPatientDetails && currentPatient && createPortal(
-                <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col animate-slide-up">
+                <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col animate-slide-up" onClick={() => setIsViewingPatientDetails(false)}>
                     {/* Sticky Header */}
-                    <div className="bg-slate-900 border-b border-slate-800 shadow-xl z-20 sticky top-0">
+                    <div className="bg-slate-900 border-b border-slate-800 shadow-xl z-20 sticky top-0" onClick={(e) => e.stopPropagation()}>
                         <div className="p-4 flex justify-between items-center">
                             <div className="flex items-center gap-4">
                                 <button onClick={() => setIsViewingPatientDetails(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
@@ -917,7 +1013,7 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 md:p-10 max-w-7xl mx-auto w-full space-y-8">
+                    <div className="flex-1 overflow-y-auto p-6 md:p-10 max-w-7xl mx-auto w-full space-y-8" onClick={(e) => e.stopPropagation()}>
                         
                         {/* GENERAL TAB */}
                         {activeRecordTab === 'general' && (
@@ -1223,11 +1319,22 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
             
             {/* View Assignment Result Modal */}
             {viewingAssignment && createPortal(
-                <div className="fixed inset-0 z-[250] bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 w-full max-w-2xl rounded-3xl p-8 border border-slate-800 max-h-[80vh] overflow-y-auto">
+                <div className="fixed inset-0 z-[250] bg-black/80 flex items-center justify-center p-4" onClick={() => setViewingAssignment(null)}>
+                    <div className="bg-slate-900 w-full max-w-2xl rounded-3xl p-8 border border-slate-800 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-xl font-bold text-white">{viewingAssignment.templateTitle}</h3>
-                            <button onClick={() => setViewingAssignment(null)} className="text-slate-400 hover:text-white">Cerrar</button>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => generatePDF(viewingAssignment)}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                    </svg>
+                                    Descargar PDF
+                                </button>
+                                <button onClick={() => setViewingAssignment(null)} className="text-slate-400 hover:text-white">Cerrar</button>
+                            </div>
                         </div>
                         <SurveyResultView assignment={viewingAssignment} templates={templates} />
                     </div>
@@ -1239,4 +1346,3 @@ const PsychologistDashboard: React.FC<Props> = ({ user, activeSection, onSection
 };
 
 export default PsychologistDashboard;
-
